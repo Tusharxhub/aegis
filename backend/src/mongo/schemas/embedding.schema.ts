@@ -9,8 +9,13 @@ export interface IIncidentEmbedding {
 }
 
 export const IncidentEmbeddingSchema = new Schema<IIncidentEmbedding>({
-  event: { type: Schema.Types.ObjectId, ref: 'InfrastructureEvent', required: true, unique: true },
+  event: {
+    type: Schema.Types.ObjectId,
+    ref: 'InfrastructureEvent',
+    required: true,
+    unique: true,
+  },
   vector: { type: [Number], required: true },
   incidentType: { type: String, required: true },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
 });

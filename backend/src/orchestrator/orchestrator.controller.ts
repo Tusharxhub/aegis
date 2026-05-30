@@ -1,28 +1,34 @@
-import { Controller, Post, Get, InternalServerErrorException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { MongoService } from '../mongo/mongo.service.js';
 
 @Controller('orchestrator')
 export class OrchestratorController {
-  constructor(
-    private readonly mongoService: MongoService,
-  ) {}
+  constructor(private readonly mongoService: MongoService) {}
 
   /**
    * Manual Training Trigger.
    * Returns validation checks on the local Custom AI Head.
    */
   @Post('train')
-  async triggerTraining(): Promise<any> {
+  triggerTraining(): any {
     try {
       return {
         success: true,
-        message: "Project Aegis Custom MLP classification head is online and fully trained on CPU.",
+        message:
+          'Project Aegis Custom MLP classification head is online and fully trained on CPU.',
         episodes_processed: 300,
         average_historical_reward: 0.94,
       };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new InternalServerErrorException(`Failed to trigger training: ${message}`);
+      throw new InternalServerErrorException(
+        `Failed to trigger training: ${message}`,
+      );
     }
   }
 
@@ -38,8 +44,8 @@ export class OrchestratorController {
         .populate({
           path: 'event',
           populate: {
-            path: 'service'
-          }
+            path: 'service',
+          },
         })
         .exec();
 
@@ -69,7 +75,9 @@ export class OrchestratorController {
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new InternalServerErrorException(`Failed to retrieve incidents: ${message}`);
+      throw new InternalServerErrorException(
+        `Failed to retrieve incidents: ${message}`,
+      );
     }
   }
 
@@ -82,7 +90,9 @@ export class OrchestratorController {
       return await this.mongoService.ServiceModel.find().exec();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new InternalServerErrorException(`Failed to retrieve services: ${message}`);
+      throw new InternalServerErrorException(
+        `Failed to retrieve services: ${message}`,
+      );
     }
   }
 }

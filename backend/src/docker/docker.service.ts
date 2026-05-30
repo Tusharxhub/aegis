@@ -57,7 +57,7 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
     await this.connectAndListen();
   }
 
-  async onModuleDestroy(): Promise<void> {
+  onModuleDestroy(): void {
     this.isShuttingDown = true;
 
     if (this.reconnectTimer) {
@@ -66,7 +66,9 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (this.eventStream) {
-      (this.eventStream as NodeJS.ReadableStream & { destroy?: () => void }).destroy?.();
+      (
+        this.eventStream as NodeJS.ReadableStream & { destroy?: () => void }
+      ).destroy?.();
       this.eventStream = null;
     }
 
@@ -118,9 +120,7 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : 'Unknown Docker error';
-      this.logger.error(
-        `Failed to connect to Docker socket: ${message}`,
-      );
+      this.logger.error(`Failed to connect to Docker socket: ${message}`);
       this.scheduleReconnect();
     }
   }
@@ -214,14 +214,19 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
       });
 
       // Docker multiplexed stream: strip control characters
-      return logBuffer
-        .toString('utf8')
-        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
-        .trim();
+      return (
+        logBuffer
+          .toString('utf8')
+          // eslint-disable-next-line no-control-regex
+          .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+          .trim()
+      );
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : 'Unknown log extraction error';
-      this.logger.warn(`⚠️  Failed to extract logs for ${containerId}: ${message}`);
+      this.logger.warn(
+        `⚠️  Failed to extract logs for ${containerId}: ${message}`,
+      );
       return `[LOG_EXTRACTION_FAILED] ${message}`;
     }
   }

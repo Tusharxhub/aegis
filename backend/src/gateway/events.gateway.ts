@@ -10,7 +10,10 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { WS_NAMESPACE, HEARTBEAT_INTERVAL_MS } from '../common/constants/index.js';
+import {
+  WS_NAMESPACE,
+  HEARTBEAT_INTERVAL_MS,
+} from '../common/constants/index.js';
 import type { WsEventName } from '../common/interfaces/websocket-event.interface.js';
 
 /**
@@ -52,7 +55,9 @@ export class AegisGateway
   // ─────────────────────────────────────────────────────────────────────────
 
   afterInit(): void {
-    this.logger.log(`🔌 WebSocket Gateway initialized on namespace "${WS_NAMESPACE}"`);
+    this.logger.log(
+      `🔌 WebSocket Gateway initialized on namespace "${WS_NAMESPACE}"`,
+    );
 
     // Start heartbeat broadcast
     this.heartbeatInterval = setInterval(() => {
@@ -139,9 +144,7 @@ export class AegisGateway
    * Handle request for current system state snapshot.
    */
   @SubscribeMessage('client:request-state')
-  handleStateRequest(
-    @ConnectedSocket() client: Socket,
-  ): void {
+  handleStateRequest(@ConnectedSocket() client: Socket): void {
     client.emit('system:state-snapshot', {
       uptime: Math.floor((Date.now() - this.startTime) / 1000),
       connectedClients: this.connectedClients,

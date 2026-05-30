@@ -12,8 +12,7 @@ export class EmbeddingService {
       this.configService.get<string>('OLLAMA_API_URL') ??
       'http://aegis-ollama:11434';
     this.model =
-      this.configService.get<string>('OLLAMA_EMBEDDING_MODEL') ??
-      'all-minilm';
+      this.configService.get<string>('OLLAMA_EMBEDDING_MODEL') ?? 'all-minilm';
   }
 
   /**
@@ -22,7 +21,7 @@ export class EmbeddingService {
    */
   async getEmbedding(text: string): Promise<number[]> {
     const url = `${this.ollamaUrl}/api/embeddings`;
-    
+
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -35,17 +34,23 @@ export class EmbeddingService {
 
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(`Ollama Embedding API returned HTTP ${response.status}: ${errorBody}`);
+        throw new Error(
+          `Ollama Embedding API returned HTTP ${response.status}: ${errorBody}`,
+        );
       }
 
       const data = (await response.json()) as { embedding: number[] };
       return data.embedding;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(`❌ Failed to fetch embedding from local Ollama: ${message}`);
-      
+      this.logger.error(
+        `❌ Failed to fetch embedding from local Ollama: ${message}`,
+      );
+
       // Standalone fallback to prevent whole loop crashes
-      this.logger.warn('⚠️ Returning fallback 384-dimension zero-vector to keep the MDP loop active.');
+      this.logger.warn(
+        '⚠️ Returning fallback 384-dimension zero-vector to keep the MDP loop active.',
+      );
       return new Array(384).fill(0);
     }
   }

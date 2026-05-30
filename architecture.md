@@ -37,7 +37,7 @@ The orchestrator is built in NestJS, utilizing its dependency injection containe
 
 ### 3. AI Client Coordinator
 - **Logic**: Destructures BullMQ job payloads, compiles raw error text, and makes a POST call to `http://aegis-ai-engine:8000/diagnose`.
-- **Contracts**: Validates the output against a strict schema. It logs the returned SentenceTransformer vector embedding array to PostgreSQL.
+- **Contracts**: Validates the output against a strict schema. It logs the returned SentenceTransformer vector embedding array to MongoDB.
 
 ### 4. Safe Remediation Engine
 - **Strict Actions**: The AI never generates or runs raw terminal shell scripts. It returns an action enum (`RESTART_CONTAINER` or `STOP_CONTAINER`).
@@ -55,9 +55,9 @@ The orchestrator is built in NestJS, utilizing its dependency injection containe
 
 ---
 
-## 🗄️ Relational Database Audit Store (PostgreSQL)
+## 🗄️ Unified Local Database Store (MongoDB)
 
-Neon PostgreSQL (interfaced via Prisma ORM) stores the audit trail and training histories.
+A single local MongoDB instance stores the audit trail, log embeddings, remediation plans, and Reinforcement Learning episode buffers. All operations are interfaced via Mongoose in NestJS and PyMongo in the AI Engine.
 
 ```mermaid
 erDiagram
@@ -65,7 +65,7 @@ erDiagram
     infrastructure_events ||--o| incident_embeddings : vector
     infrastructure_events ||--o| remediation_plans : diagnostics
     remediation_plans ||--o| action_executions : results
-    metrics_snapshots
+    episodes ||--o{ services : targets
 ```
 
 - **services**: Tracks monitored targets, status enums (`HEALTHY`, `CRASHED`), and cumulative restart counts.
@@ -73,3 +73,4 @@ erDiagram
 - **incident_embeddings**: Stores the 384-dimensional floating point representation of the logs (`Float[]` array).
 - **remediation_plans**: Stores the neural net diagnosis outputs, risk level labels, and suggested actions.
 - **action_executions**: Audits execution logs, outcomes, and task duration metrics.
+- **episodes**: Replay buffer storing the Markov Decision Process `(State, Action, Reward, NextState)` tuples for Reinforcement Learning training.

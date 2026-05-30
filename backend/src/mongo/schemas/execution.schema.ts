@@ -12,11 +12,16 @@ export interface IActionExecution {
 }
 
 export const ActionExecutionSchema = new Schema<IActionExecution>({
-  plan: { type: Schema.Types.ObjectId, ref: 'RemediationPlan', required: true, unique: true },
+  plan: {
+    type: Schema.Types.ObjectId,
+    ref: 'RemediationPlan',
+    required: true,
+    unique: true,
+  },
   actionTaken: { type: String, required: true },
   isSuccessful: { type: Boolean, required: true },
   executionLogs: { type: String, default: '' },
   durationMs: { type: Number, default: null },
   errorMessage: { type: String, default: null },
-  executedAt: { type: Date, default: Date.now }
+  executedAt: { type: Date, default: Date.now },
 });

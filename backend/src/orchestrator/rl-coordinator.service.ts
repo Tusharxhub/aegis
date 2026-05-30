@@ -36,11 +36,13 @@ export class RlCoordinatorService implements OnModuleInit {
       'your_secure_dev_key';
 
     // 5 minutes in production, default 10 seconds for instant demo verification
-    this.evaluationDelaySeconds =
-      parseInt(this.configService.get<string>('EVALUATION_WINDOW_SECONDS') ?? '10', 10);
+    this.evaluationDelaySeconds = parseInt(
+      this.configService.get<string>('EVALUATION_WINDOW_SECONDS') ?? '10',
+      10,
+    );
   }
 
-  async onModuleInit(): Promise<void> {
+  onModuleInit(): void {
     this.logger.log(
       `🤖 RL Coordinator Service online. Evaluation Window: ${this.evaluationDelaySeconds}s. Brain Endpoint: ${this.rlBrainUrl}`,
     );
@@ -49,15 +51,29 @@ export class RlCoordinatorService implements OnModuleInit {
   /**
    * Orchestrate the full Markov Decision Process (MDP) loop.
    */
-  async processCrashLoop(event: DockerCrashEvent, serviceId: string, eventId: string): Promise<void> {
+  async processCrashLoop(
+    event: DockerCrashEvent,
+    serviceId: string,
+    eventId: string,
+  ): Promise<void> {
     const startTime = Date.now();
-    this.emitTerminalLog('info', 'RL Coordinator', `🚀 Starting RL Healing loop for container [${event.containerName}]`);
+    this.emitTerminalLog(
+      'info',
+      'RL Coordinator',
+      `🚀 Starting RL Healing loop for container [${event.containerName}]`,
+    );
 
     try {
       // 1. Get Log Embeddings from local Ollama
-      this.emitTerminalLog('ai', 'Ollama', `📊 Generating embeddings for container logs...`);
+      this.emitTerminalLog(
+        'ai',
+        'Ollama',
+        `📊 Generating embeddings for container logs...`,
+      );
       const embedding = await this.embeddingService.getEmbedding(event.logs);
-      this.logger.log(`Log embedding vector generated. Size: ${embedding.length}`);
+      this.logger.log(
+        `Log embedding vector generated. Size: ${embedding.length}`,
+      );
 
       // 2. Concatenate embeddings + exit code + OOM flag to form the State Vector
       const isOom = event.eventType === 'oom' ? 1.0 : 0.0;
@@ -72,9 +88,17 @@ export class RlCoordinatorService implements OnModuleInit {
       });
 
       // 3. Ask Python brain for predicted healing action
-      this.emitTerminalLog('ai', 'RL Brain', `🧠 Requesting action inference from Python SB3 model...`);
+      this.emitTerminalLog(
+        'ai',
+        'RL Brain',
+        `🧠 Requesting action inference from Python SB3 model...`,
+      );
       const action = await this.requestActionPrediction(stateVector);
-      this.emitTerminalLog('ai', 'RL Brain', `🎯 Decoded RL Action: ${action} [${this.getActionName(action)}]`);
+      this.emitTerminalLog(
+        'ai',
+        'RL Brain',
+        `🎯 Decoded RL Action: ${action} [${this.getActionName(action)}]`,
+      );
 
       // 4. Update the RemediationPlan database entry (MongoDB)
       const actionNamesMap = ['DO_NOTHING', 'RESTART', 'ROLLBACK', 'SCALE'];
@@ -97,7 +121,10 @@ export class RlCoordinatorService implements OnModuleInit {
         result: {
           analysis: `RL predicted action: ${actionNamesMap[action]}`,
           confidenceScore: 1.0,
-          suggestedAction: { type: actionNamesMap[action].toLowerCase(), command: `execute ${action}` },
+          suggestedAction: {
+            type: actionNamesMap[action].toLowerCase(),
+            command: `execute ${action}`,
+          },
         },
         processingTimeMs: Date.now() - startTime,
       });
@@ -116,12 +143,24 @@ export class RlCoordinatorService implements OnModuleInit {
       let isSuccessful = true;
 
       try {
-        executionLogs = await this.executeDockerAction(action, event.containerId, event.containerName);
-        this.emitTerminalLog('info', 'Docker API', `✅ Action executed: ${executionLogs}`);
+        executionLogs = await this.executeDockerAction(
+          action,
+          event.containerId,
+          event.containerName,
+        );
+        this.emitTerminalLog(
+          'info',
+          'Docker API',
+          `✅ Action executed: ${executionLogs}`,
+        );
       } catch (err: unknown) {
         isSuccessful = false;
         executionLogs = err instanceof Error ? err.message : String(err);
-        this.emitTerminalLog('error', 'Docker API', `❌ Failed to execute action: ${executionLogs}`);
+        this.emitTerminalLog(
+          'error',
+          'Docker API',
+          `❌ Failed to execute action: ${executionLogs}`,
+        );
       }
 
       // Record Execution in DB
@@ -159,9 +198,13 @@ export class RlCoordinatorService implements OnModuleInit {
       );
 
       // 6. Wait for evaluation window, evaluate reward, and commit Episode
-      this.emitTerminalLog('info', 'RL Coordinator', `⏳ Scheduling Reward Evaluation in ${this.evaluationDelaySeconds}s...`);
-      setTimeout(async () => {
-        await this.evaluateRewardAndSaveEpisode({
+      this.emitTerminalLog(
+        'info',
+        'RL Coordinator',
+        `⏳ Scheduling Reward Evaluation in ${this.evaluationDelaySeconds}s...`,
+      );
+      setTimeout(() => {
+        void this.evaluateRewardAndSaveEpisode({
           event,
           serviceId,
           eventId,
@@ -171,7 +214,6 @@ export class RlCoordinatorService implements OnModuleInit {
           containerName: event.containerName,
         });
       }, this.evaluationDelaySeconds * 1000);
-
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
       this.logger.error(`Error in RL Process Loop: ${msg}`);
@@ -182,7 +224,9 @@ export class RlCoordinatorService implements OnModuleInit {
   /**
    * Hit the Python FastAPI API key-secured prediction route.
    */
-  private async requestActionPrediction(stateVector: number[]): Promise<number> {
+  private async requestActionPrediction(
+    stateVector: number[],
+  ): Promise<number> {
     const url = `${this.rlBrainUrl}/predict`;
 
     try {
@@ -203,8 +247,14 @@ export class RlCoordinatorService implements OnModuleInit {
       return data.action;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`RL Brain prediction failed: ${msg}. Falling back to default RESTART (1).`);
-      this.emitTerminalLog('warn', 'RL Brain', `⚠️ Prediction failed: ${msg}. Fallback: RESTART.`);
+      this.logger.error(
+        `RL Brain prediction failed: ${msg}. Falling back to default RESTART (1).`,
+      );
+      this.emitTerminalLog(
+        'warn',
+        'RL Brain',
+        `⚠️ Prediction failed: ${msg}. Fallback: RESTART.`,
+      );
       return 1; // Fallback to restart action
     }
   }
@@ -212,7 +262,11 @@ export class RlCoordinatorService implements OnModuleInit {
   /**
    * Execute the selected self-healing task using the Dockerode API.
    */
-  private async executeDockerAction(action: number, containerId: string, containerName: string): Promise<string> {
+  private async executeDockerAction(
+    action: number,
+    containerId: string,
+    containerName: string,
+  ): Promise<string> {
     switch (action) {
       case 0:
         return 'Policy decided DO_NOTHING. Monitored without changes.';
@@ -235,7 +289,8 @@ export class RlCoordinatorService implements OnModuleInit {
           const versionMatch = tag.match(/v(\d+)/);
           if (versionMatch) {
             const version = parseInt(versionMatch[1], 10);
-            rollbackImage = version > 1 ? `${repo}:v${version - 1}` : `${repo}:latest`;
+            rollbackImage =
+              version > 1 ? `${repo}:v${version - 1}` : `${repo}:latest`;
           } else {
             rollbackImage = `${repo}:latest`;
           }
@@ -287,15 +342,22 @@ export class RlCoordinatorService implements OnModuleInit {
     containerId: string;
     containerName: string;
   }): Promise<void> {
-    const { event, serviceId, stateVector, action, containerId, containerName } = params;
+    const { event, stateVector, action, containerId, containerName } = params;
     this.logger.log(`Evaluating reward for container ${containerName}`);
-    this.emitTerminalLog('info', 'RL Coordinator', `🧐 Evaluating healing reward post-execution for ${containerName}...`);
+    this.emitTerminalLog(
+      'info',
+      'RL Coordinator',
+      `🧐 Evaluating healing reward post-execution for ${containerName}...`,
+    );
 
     let isHealthy = false;
     try {
       const container = this.docker.getContainer(containerId);
       const inspect = await container.inspect();
-      isHealthy = inspect.State.Running && !inspect.State.Restarting && inspect.State.ExitCode === 0;
+      isHealthy =
+        inspect.State.Running &&
+        !inspect.State.Restarting &&
+        inspect.State.ExitCode === 0;
     } catch {
       isHealthy = false;
     }
@@ -314,8 +376,17 @@ export class RlCoordinatorService implements OnModuleInit {
     let nextLogs = '';
     try {
       const container = this.docker.getContainer(containerId);
-      const logBuffer = await container.logs({ stdout: true, stderr: true, tail: 50, timestamps: false });
-      nextLogs = logBuffer.toString('utf8').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim();
+      const logBuffer = await container.logs({
+        stdout: true,
+        stderr: true,
+        tail: 50,
+        timestamps: false,
+      });
+      nextLogs = logBuffer
+        .toString('utf8')
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+        .trim();
     } catch {
       nextLogs = 'Container is stopped or missing';
     }
@@ -357,7 +428,7 @@ export class RlCoordinatorService implements OnModuleInit {
         reward,
         timestamp: new Date().toISOString(),
       });
-      
+
       this.gateway.broadcast('rl:episode-saved', {
         episodeId: episode._id,
         containerName,
@@ -377,7 +448,11 @@ export class RlCoordinatorService implements OnModuleInit {
    */
   async triggerManualTraining(): Promise<any> {
     const url = `${this.rlBrainUrl}/train`;
-    this.emitTerminalLog('info', 'RL Coordinator', `⚙️ Requesting MANUAL training session from Python RL Brain...`);
+    this.emitTerminalLog(
+      'info',
+      'RL Coordinator',
+      `⚙️ Requesting MANUAL training session from Python RL Brain...`,
+    );
 
     try {
       const response = await fetch(url, {
@@ -392,12 +467,20 @@ export class RlCoordinatorService implements OnModuleInit {
       }
 
       const result = await response.json();
-      this.emitTerminalLog('info', 'RL Coordinator', `✅ Manual training completed: ${JSON.stringify(result)}`);
+      this.emitTerminalLog(
+        'info',
+        'RL Coordinator',
+        `✅ Manual training completed: ${JSON.stringify(result)}`,
+      );
       return result;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Manual training trigger failed: ${msg}`);
-      this.emitTerminalLog('error', 'RL Coordinator', `❌ Training failed: ${msg}`);
+      this.emitTerminalLog(
+        'error',
+        'RL Coordinator',
+        `❌ Training failed: ${msg}`,
+      );
       throw err;
     }
   }

@@ -17,9 +17,7 @@ import type {
 } from '../common/interfaces/queue-payload.interface.js';
 import { JobPriority } from '../common/interfaces/queue-payload.interface.js';
 import { WsEventName } from '../common/interfaces/websocket-event.interface.js';
-import {
-  MAX_JOB_ATTEMPTS,
-} from '../common/constants/index.js';
+import { MAX_JOB_ATTEMPTS } from '../common/constants/index.js';
 import {
   ServiceStatus,
   EventType,
@@ -42,8 +40,10 @@ export class OrchestratorService implements OnModuleInit {
     private readonly configService: ConfigService,
   ) {}
 
-  async onModuleInit(): Promise<void> {
-    this.logger.log('🧠 Core Relational Orchestrator online — custom AI pipelines loaded.');
+  onModuleInit(): void {
+    this.logger.log(
+      '🧠 Core Relational Orchestrator online — custom AI pipelines loaded.',
+    );
   }
 
   /**
@@ -66,10 +66,16 @@ export class OrchestratorService implements OnModuleInit {
   @OnEvent('docker.crash')
   async handleDockerCrash(event: DockerCrashEvent): Promise<void> {
     try {
-      this.logger.warn(`🚨 Intercepted container crash event: [${event.containerName}]`);
-      this.emitTerminalLog('warn', 'Watcher', `🚨 Container [${event.containerName}] crashed (exit: ${event.exitCode})`);
+      this.logger.warn(
+        `🚨 Intercepted container crash event: [${event.containerName}]`,
+      );
+      this.emitTerminalLog(
+        'warn',
+        'Watcher',
+        `🚨 Container [${event.containerName}] crashed (exit: ${event.exitCode})`,
+      );
 
-      // 1. Log incident status to PostgreSQL
+      // 1. Log incident status to MongoDB
       const service = await this.auditService.upsertService(
         event.containerId,
         event.containerName,
@@ -117,11 +123,19 @@ export class OrchestratorService implements OnModuleInit {
       };
 
       await this.queueService.enqueueCrashEvent(jobPayload);
-      this.emitTerminalLog('info', 'Queue', `📥 Job enqueued for custom AI diagnosis loop.`);
+      this.emitTerminalLog(
+        'info',
+        'Queue',
+        `📥 Job enqueued for custom AI diagnosis loop.`,
+      );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Orchestration failed for crash event: ${message}`);
-      this.emitTerminalLog('error', 'Orchestrator', `❌ Failed to process crash: ${message}`);
+      this.emitTerminalLog(
+        'error',
+        'Orchestrator',
+        `❌ Failed to process crash: ${message}`,
+      );
     }
   }
 
@@ -154,13 +168,19 @@ export class OrchestratorService implements OnModuleInit {
         throw new Error('InfrastructureEvent record not found in MongoDB');
       }
 
-      this.emitTerminalLog('ai', 'AI Engine', `🧠 Diagnosing logs via local custom classification head...`);
+      this.emitTerminalLog(
+        'ai',
+        'AI Engine',
+        `🧠 Diagnosing logs via local custom classification head...`,
+      );
 
       // 2. Call local Custom AI Microservice
       const diagnosis = await this.aiAgent.diagnoseLogs(event.logs);
 
       // 3. Save AI embeddings (simulated dummy array or mock values from database score)
-      const mockEmbedding = new Array(384).fill(0).map(() => Math.random() * 2 - 1);
+      const mockEmbedding = new Array(384)
+        .fill(0)
+        .map(() => Math.random() * 2 - 1);
       await this.auditService.logIncidentEmbedding(
         dbEvent.id,
         mockEmbedding,
@@ -205,20 +225,37 @@ export class OrchestratorService implements OnModuleInit {
         diagnosis.suggestedAction !== 'IGNORE';
 
       if (isSafetyPassed) {
-        this.emitTerminalLog('info', 'Remediation', `⚡ Safety checklist passed. Executing: ${diagnosis.suggestedAction}`);
-        
+        this.emitTerminalLog(
+          'info',
+          'Remediation',
+          `⚡ Safety checklist passed. Executing: ${diagnosis.suggestedAction}`,
+        );
+
         try {
           if (diagnosis.suggestedAction === 'RESTART_CONTAINER') {
-            executionLogs = await this.remediationEngine.executeRestart(event.containerId);
+            executionLogs = await this.remediationEngine.executeRestart(
+              event.containerId,
+            );
           } else if (diagnosis.suggestedAction === 'STOP_CONTAINER') {
-            executionLogs = await this.remediationEngine.executeStop(event.containerId);
+            executionLogs = await this.remediationEngine.executeStop(
+              event.containerId,
+            );
           }
           isSuccessful = true;
-          this.emitTerminalLog('info', 'Remediation', `✅ Safe Execution Completed: ${executionLogs}`);
+          this.emitTerminalLog(
+            'info',
+            'Remediation',
+            `✅ Safe Execution Completed: ${executionLogs}`,
+          );
         } catch (execErr: unknown) {
           isSuccessful = false;
-          executionLogs = execErr instanceof Error ? execErr.message : String(execErr);
-          this.emitTerminalLog('error', 'Remediation', `❌ Action execution failed: ${executionLogs}`);
+          executionLogs =
+            execErr instanceof Error ? execErr.message : String(execErr);
+          this.emitTerminalLog(
+            'error',
+            'Remediation',
+            `❌ Action execution failed: ${executionLogs}`,
+          );
         }
 
         // Save action execution audit trail
@@ -249,12 +286,22 @@ export class OrchestratorService implements OnModuleInit {
           diagnosis.suggestedAction === 'IGNORE'
             ? 'Policy suggested IGNORE.'
             : `Confidence threshold (${diagnosis.confidenceScore.toFixed(2)}) inadequate or high risk level.`;
-            
-        this.logger.warn(`⏭️ Skipped automatic self-healing. Reason: ${reason}`);
-        this.emitTerminalLog('warn', 'Safety Guard', `⏭️ Remediation skipped: ${reason}`);
-        
-        await this.auditService.updatePlanStatus(plan.id, RemediationStatus.SKIPPED, Date.now() - startTime);
-        
+
+        this.logger.warn(
+          `⏭️ Skipped automatic self-healing. Reason: ${reason}`,
+        );
+        this.emitTerminalLog(
+          'warn',
+          'Safety Guard',
+          `⏭️ Remediation skipped: ${reason}`,
+        );
+
+        await this.auditService.updatePlanStatus(
+          plan.id,
+          RemediationStatus.SKIPPED,
+          Date.now() - startTime,
+        );
+
         await this.auditService.upsertService(
           event.containerId,
           event.containerName,
@@ -287,7 +334,11 @@ export class OrchestratorService implements OnModuleInit {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Job processing failed: ${message}`);
-      this.emitTerminalLog('error', 'Orchestrator', `❌ Job process failed: ${message}`);
+      this.emitTerminalLog(
+        'error',
+        'Orchestrator',
+        `❌ Job process failed: ${message}`,
+      );
       reject(error instanceof Error ? error : new Error(message));
     }
   }
@@ -303,7 +354,10 @@ export class OrchestratorService implements OnModuleInit {
       kill: EventType.KILL,
     };
     const mappedType = eventTypeMap[eventType] ?? EventType.DIE;
-    return await this.auditService.getLatestEventForService(serviceId, mappedType);
+    return await this.auditService.getLatestEventForService(
+      serviceId,
+      mappedType,
+    );
   }
 
   private emitTerminalLog(

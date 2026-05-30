@@ -11,11 +11,7 @@ import { GatewayModule } from '../gateway/gateway.module.js';
 @Module({
   imports: [DockerModule, QueueModule, AiAgentModule, GatewayModule],
   controllers: [OrchestratorController],
-  providers: [
-    OrchestratorService,
-    AuditService,
-    RemediationEngine,
-  ],
+  providers: [OrchestratorService, AuditService, RemediationEngine],
   exports: [OrchestratorService, AuditService, RemediationEngine],
 })
 export class OrchestratorModule {}

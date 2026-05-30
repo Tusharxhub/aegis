@@ -12,5 +12,5 @@ export const MetricsSnapshotSchema = new Schema<IMetricsSnapshot>({
   cpuUsage: { type: Number, required: true },
   memoryUsage: { type: Number, required: true },
   diskUsage: { type: Number, required: true },
-  timestamp: { type: Date, default: Date.now }
+  timestamp: { type: Date, default: Date.now },
 });

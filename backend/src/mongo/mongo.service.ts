@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import mongoose, { Connection, Model } from 'mongoose';
 import {
@@ -32,7 +37,9 @@ export class MongoService implements OnModuleInit, OnModuleDestroy {
       this.configService.get<string>('MONGO_URI') ??
       'mongodb://aegis-mongo:27017/aegis';
 
-    this.logger.log(`🔌 Initializing Mongoose Connection to local MongoDB: ${mongoUri}`);
+    this.logger.log(
+      `🔌 Initializing Mongoose Connection to local MongoDB: ${mongoUri}`,
+    );
 
     try {
       this.connection = await mongoose.createConnection(mongoUri).asPromise();
@@ -55,13 +62,28 @@ export class MongoService implements OnModuleInit, OnModuleDestroy {
 
   private initializeSchemasAndModels(): void {
     this.ServiceModel = this.connection.model('Service', ServiceSchema);
-    this.EventModel = this.connection.model('InfrastructureEvent', InfrastructureEventSchema);
-    this.EmbeddingModel = this.connection.model('IncidentEmbedding', IncidentEmbeddingSchema);
-    this.PlanModel = this.connection.model('RemediationPlan', RemediationPlanSchema);
-    this.ExecutionModel = this.connection.model('ActionExecution', ActionExecutionSchema);
+    this.EventModel = this.connection.model(
+      'InfrastructureEvent',
+      InfrastructureEventSchema,
+    );
+    this.EmbeddingModel = this.connection.model(
+      'IncidentEmbedding',
+      IncidentEmbeddingSchema,
+    );
+    this.PlanModel = this.connection.model(
+      'RemediationPlan',
+      RemediationPlanSchema,
+    );
+    this.ExecutionModel = this.connection.model(
+      'ActionExecution',
+      ActionExecutionSchema,
+    );
     this.EpisodeModel = this.connection.model('Episode', EpisodeSchema);
-    this.MetricsModel = this.connection.model('MetricsSnapshot', MetricsSnapshotSchema);
-    
+    this.MetricsModel = this.connection.model(
+      'MetricsSnapshot',
+      MetricsSnapshotSchema,
+    );
+
     this.logger.log('✅ Mongoose schemas compiled and models initialized.');
   }
 }

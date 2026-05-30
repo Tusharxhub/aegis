@@ -179,6 +179,33 @@ cd frontend && npm run dev
 
 ---
 
+## 🤖 AI Model Training Pipeline
+
+Project Aegis features a localized, custom AI engine capable of log text classification and offline reinforcement learning. To train these neural network models inside the air-gapped container, follow these steps:
+
+### Step 1: Generate Synthetic DevOps Log Data
+Build the synthetic log dataset at `/app/training/synthetic_logs.csv` inside the container:
+```bash
+docker exec -it aegis-ai-engine python training/generate_synthetic_data.py
+```
+*Effect: Generates 900 custom log samples across 6 distinct incident classes (OOM_KILL, DB_TIMEOUT, PORT_COLLISION, CRASH_LOOP, MEMORY_LEAK, PERMISSION_DENIED).*
+
+### Step 2: Train the Log Classifier Head
+Vectorize log text and train the custom classification head:
+```bash
+docker exec -it aegis-ai-engine python training/train_classifier.py
+```
+*Effect: Encodes the logs using SentenceTransformer, trains the MLP head to 100% accuracy, and serializes the trained models to `/app/models/sentence_transformer` and `/app/models/classifier_head.joblib`.*
+
+### Step 3: Train the Offline Reinforcement Learning Agent
+Train the offline healing policy agent on MongoDB episodes:
+```bash
+docker exec -it aegis-ai-engine python training/train_rl.py
+```
+*Effect: Connects to MongoDB, seeds the episodes database if empty, executes the Gymnasium training loop for 10,000 steps, and persists the trained agent weights as `ppo_aegis_agent.zip`.*
+
+---
+
 ## 💥 Live Chaos Simulation
 
 To test Aegis's autonomous self-healing loops, you can trigger specific microservice failures inside the running cluster. The `demo-crash-service` container exposes three endpoints on host port `3002` simulating realistic DevOps crashes:

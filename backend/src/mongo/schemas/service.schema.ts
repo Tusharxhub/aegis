@@ -13,26 +13,29 @@ export interface IService {
   updatedAt: Date;
 }
 
-export const ServiceSchema = new Schema<IService>({
-  containerId: { type: String, required: true, unique: true },
-  name: { type: String, required: true },
-  imageName: { type: String, required: true },
-  status: {
-    type: String,
-    enum: ['HEALTHY', 'DEGRADED', 'CRASHED', 'RESTARTING', 'UNKNOWN'],
-    default: 'HEALTHY',
+export const ServiceSchema = new Schema<IService>(
+  {
+    containerId: { type: String, required: true, unique: true },
+    name: { type: String, required: true },
+    imageName: { type: String, required: true },
+    status: {
+      type: String,
+      enum: ['HEALTHY', 'DEGRADED', 'CRASHED', 'RESTARTING', 'UNKNOWN'],
+      default: 'HEALTHY',
+    },
+    exitCode: { type: Number, default: null },
+    restartCount: { type: Number, default: 0 },
+    lastSeenAt: { type: Date, default: Date.now },
   },
-  exitCode: { type: Number, default: null },
-  restartCount: { type: Number, default: 0 },
-  lastSeenAt: { type: Date, default: Date.now },
-}, {
-  timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
-});
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  },
+);
 
 ServiceSchema.virtual('events', {
   ref: 'InfrastructureEvent',
   localField: '_id',
-  foreignField: 'service'
+  foreignField: 'service',
 });

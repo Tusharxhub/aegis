@@ -17,7 +17,13 @@ export class AuditService {
   /**
    * Upsert a service container record in MongoDB.
    */
-  async upsertService(containerId: string, name: string, imageName: string, status: ServiceStatus, exitCode?: number) {
+  async upsertService(
+    containerId: string,
+    name: string,
+    imageName: string,
+    status: ServiceStatus,
+    exitCode?: number,
+  ) {
     try {
       return await this.mongoService.ServiceModel.findOneAndUpdate(
         { containerId },
@@ -31,9 +37,9 @@ export class AuditService {
             name,
             imageName,
             restartCount: 0,
-          }
+          },
         },
-        { upsert: true, new: true }
+        { upsert: true, new: true },
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -45,7 +51,13 @@ export class AuditService {
   /**
    * Create an infrastructure incident log entry.
    */
-  async logCrashEvent(serviceId: string, eventType: EventType, exitCode: number, logs: string, metadata: any) {
+  async logCrashEvent(
+    serviceId: string,
+    eventType: EventType,
+    exitCode: number,
+    logs: string,
+    metadata: any,
+  ) {
     try {
       return await this.mongoService.EventModel.create({
         service: serviceId,
@@ -65,7 +77,11 @@ export class AuditService {
   /**
    * Log SentenceTransformer embeddings to MongoDB.
    */
-  async logIncidentEmbedding(eventId: string, embedding: number[], incidentType: string) {
+  async logIncidentEmbedding(
+    eventId: string,
+    embedding: number[],
+    incidentType: string,
+  ) {
     try {
       return await this.mongoService.EmbeddingModel.findOneAndUpdate(
         { event: eventId },
@@ -73,9 +89,9 @@ export class AuditService {
           $set: {
             vector: embedding,
             incidentType,
-          }
+          },
         },
-        { upsert: true, new: true }
+        { upsert: true, new: true },
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -115,7 +131,11 @@ export class AuditService {
   /**
    * Update plan status.
    */
-  async updatePlanStatus(planId: string, status: RemediationStatus, processingTimeMs?: number) {
+  async updatePlanStatus(
+    planId: string,
+    status: RemediationStatus,
+    processingTimeMs?: number,
+  ) {
     try {
       return await this.mongoService.PlanModel.findByIdAndUpdate(
         planId,
@@ -129,7 +149,9 @@ export class AuditService {
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to update remediation plan status in MongoDB: ${msg}`);
+      this.logger.error(
+        `Failed to update remediation plan status in MongoDB: ${msg}`,
+      );
     }
   }
 
@@ -155,7 +177,9 @@ export class AuditService {
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to save action execution log in MongoDB: ${msg}`);
+      this.logger.error(
+        `Failed to save action execution log in MongoDB: ${msg}`,
+      );
       throw err;
     }
   }
@@ -189,7 +213,9 @@ export class AuditService {
         .exec();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to retrieve latest event for service ${serviceId}: ${msg}`);
+      this.logger.error(
+        `Failed to retrieve latest event for service ${serviceId}: ${msg}`,
+      );
       return null;
     }
   }

@@ -34,7 +34,9 @@ export class AiAgentService {
    */
   async diagnoseLogs(logs: string): Promise<DiagnoseResponse> {
     const url = `${this.aiEngineUrl}/diagnose`;
-    this.logger.log(`🧠 Contacting local Custom AI Engine for diagnosis at: ${url}`);
+    this.logger.log(
+      `🧠 Contacting local Custom AI Engine for diagnosis at: ${url}`,
+    );
 
     try {
       const response = await fetch(url, {
@@ -47,16 +49,22 @@ export class AiAgentService {
 
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(`AI Engine returned HTTP ${response.status}: ${errorBody}`);
+        throw new Error(
+          `AI Engine returned HTTP ${response.status}: ${errorBody}`,
+        );
       }
 
       const data = (await response.json()) as DiagnoseResponse;
-      this.logger.log(`✅ Diagnosis complete: Class [${data.incidentType}] | Suggestion: ${data.suggestedAction} (Confidence: ${data.confidenceScore.toFixed(2)})`);
+      this.logger.log(
+        `✅ Diagnosis complete: Class [${data.incidentType}] | Suggestion: ${data.suggestedAction} (Confidence: ${data.confidenceScore.toFixed(2)})`,
+      );
       return data;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`❌ Failed to diagnose logs via custom AI Engine: ${message}`);
-      
+      this.logger.error(
+        `❌ Failed to diagnose logs via custom AI Engine: ${message}`,
+      );
+
       // Strict safety fallback: Do not perform automatic remediation
       return {
         incidentType: 'UNKNOWN_FAILURE',

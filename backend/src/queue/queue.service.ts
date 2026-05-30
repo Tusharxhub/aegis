@@ -32,10 +32,12 @@ export class QueueService implements OnModuleInit {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async onModuleInit(): Promise<void> {
+  onModuleInit(): void {
     const redisUrl = this.configService.get<string>('REDIS_URL');
     if (!redisUrl) {
-      this.logger.error('❌ REDIS_URL is not configured. Queue will not start.');
+      this.logger.error(
+        '❌ REDIS_URL is not configured. Queue will not start.',
+      );
       return;
     }
 
@@ -80,11 +82,14 @@ export class QueueService implements OnModuleInit {
       );
     });
 
-    this.worker.on('failed', (job: Job<CrashJobPayload> | undefined, err: Error) => {
-      this.logger.error(
-        `❌ Job ${job?.id ?? 'unknown'} failed: ${err.message}`,
-      );
-    });
+    this.worker.on(
+      'failed',
+      (job: Job<CrashJobPayload> | undefined, err: Error) => {
+        this.logger.error(
+          `❌ Job ${job?.id ?? 'unknown'} failed: ${err.message}`,
+        );
+      },
+    );
 
     // ── Queue Events ──────────────────────────────────────────────────────
     this.queueEvents = new QueueEvents(REMEDIATION_QUEUE, { connection });
