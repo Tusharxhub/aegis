@@ -1,86 +1,85 @@
 import os
-import gymnasium as gym
-from gymnasium.spaces import Box, Discrete
 import numpy as np
+import gymnasium as gym
+from gymnasium import spaces
 from pymongo import MongoClient
 
 class AegisOfflineEnv(gym.Env):
     """
-    Offline Reinforcement Learning Environment for Aegis.
-    Learns from historical incident executions stored in MongoDB.
+    Custom Gymnasium environment wrapper that connects directly to the local MongoDB
+    instance to load historical episodes for offline Reinforcement Learning.
     """
-    def __init__(self):
+    def __init__(self, mongo_uri=None):
         super(AegisOfflineEnv, self).__init__()
         
-        # Connect to MongoDB
-        mongo_uri = os.environ.get("MONGO_URI", "mongodb://aegis-mongo:27017/aegis")
-        self.client = MongoClient(mongo_uri)
+        # Read MONGO_URI from env or use fallback
+        if mongo_uri is None:
+            mongo_uri = os.getenv("MONGO_URI", "mongodb://aegis-mongo:27017/aegis")
         
-        # Fallback to local if aegis-mongo fails to resolve in local test, but code expects aegis-mongo
+        print(f"Connecting to MongoDB at: {mongo_uri}")
+        self.client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
         
-        self.db = self.client.get_default_database(default="aegis")
-        self.collection = self.db['episodes']
-        
-        # Fetch last 1000 episodes
         try:
-            episodes = list(self.collection.find().sort('_id', -1).limit(1000))
-            self.episodes = episodes[::-1] # Chronological order
-        except Exception as e:
-            print(f"Warning: Failed to fetch from MongoDB ({e}). Falling back to empty episodes.")
-            self.episodes = []
+            self.db = self.client.get_default_database()
+            self.episodes_col = self.db["episodes"]
             
-        # Observation space: 384-dim FAISS embedding + OOM flag + Exit Code = 386
-        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(386,), dtype=np.float32)
+            # Fetch all episodes
+            self.episodes = list(self.episodes_col.find().sort("timestamp", -1))
+            self.num_episodes = len(self.episodes)
+        except Exception as e:
+            self.client.close()
+            raise RuntimeError(f"Database connection error: {str(e)}")
         
-        # Action Space: Discrete(4)
-        # 0: DO_NOTHING, 1: RESTART, 2: ROLLBACK, 3: SCALE
-        self.action_space = Discrete(4)
+        # CRITICAL CONSTRAINT: Handle empty collection
+        if self.num_episodes == 0:
+            self.client.close()
+            raise RuntimeError("No training episodes found in MongoDB buffer")
         
-        self.current_step_idx = 0
+        print(f"Loaded {self.num_episodes} training episodes from MongoDB.")
         
+        # Action space: 0=DO_NOTHING, 1=RESTART, 2=ROLLBACK, 3=SCALE
+        self.action_space = spaces.Discrete(4)
+        
+        # Observation Space: 386 dimensions
+        self.observation_space = spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(386,),
+            dtype=np.float32
+        )
+        
+        self.current_idx = 0
+
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-        self.current_step_idx = 0
-        return self._get_observation(), {}
+        # Draw a random episode from the replay buffer
+        self.current_idx = np.random.randint(0, self.num_episodes)
+        episode = self.episodes[self.current_idx]
         
-    def _get_observation(self):
-        if len(self.episodes) == 0:
-            # Synthetic dummy data
-            return np.zeros(386, dtype=np.float32)
-            
-        if self.current_step_idx >= len(self.episodes):
-            idx = len(self.episodes) - 1
-        else:
-            idx = self.current_step_idx
-            
-        episode = self.episodes[idx]
-        state = episode.get('state')
-        
-        if state is None or len(state) != 386:
-            state = np.zeros(386, dtype=np.float32)
-            
-        return np.array(state, dtype=np.float32)
-        
+        # Extract state vector (must be 386 elements)
+        state = np.array(episode['state_vector'], dtype=np.float32)
+        return state, {}
+
     def step(self, action):
-        if len(self.episodes) == 0:
-            # Dummy step
-            return np.zeros(386, dtype=np.float32), 0.0, True, False, {}
-            
-        episode = self.episodes[self.current_step_idx]
-        historical_action = episode.get('action', 0)
-        stored_reward = episode.get('reward', 0.0)
+        episode = self.episodes[self.current_idx]
+        actual_action = int(episode['action_taken'])
+        actual_reward = float(episode['reward'])
         
-        # Predict the action taken in the historical record
-        if action == historical_action:
-            reward = float(stored_reward)
+        # Compare policy action against actual action taken
+        if action == actual_action:
+            reward = actual_reward
         else:
-            reward = -1.0
-            
-        self.current_step_idx += 1
+            if actual_reward > 0:
+                reward = -abs(actual_reward)  # Penalize for missing out on successful healing action
+            else:
+                reward = -1.0  # Step penalty for trying something else when historical action failed
         
-        terminated = self.current_step_idx >= len(self.episodes)
+        next_state = np.array(episode.get('next_state_vector', episode['state_vector']), dtype=np.float32)
+        terminated = True
         truncated = False
         
-        next_state = self._get_observation() if not terminated else np.zeros(386, dtype=np.float32)
-        
         return next_state, reward, terminated, truncated, {}
+
+    def close(self):
+        if hasattr(self, 'client') and self.client:
+            self.client.close()

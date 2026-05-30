@@ -26,7 +26,7 @@ import {
   RemediationStatus,
   ActionType,
   RiskLevel,
-} from '@prisma/client';
+} from '../common/interfaces/db-types.js';
 
 @Injectable()
 export class OrchestratorService implements OnModuleInit {
@@ -149,9 +149,9 @@ export class OrchestratorService implements OnModuleInit {
       }
 
       // 1. Fetch event from database
-      const dbEvent = await this.prismaEventLookup(serviceId, event.eventType);
+      const dbEvent = await this.dbEventLookup(serviceId, event.eventType);
       if (!dbEvent) {
-        throw new Error('InfrastructureEvent record not found in PostgreSQL');
+        throw new Error('InfrastructureEvent record not found in MongoDB');
       }
 
       this.emitTerminalLog('ai', 'AI Engine', `🧠 Diagnosing logs via local custom classification head...`);
@@ -296,7 +296,7 @@ export class OrchestratorService implements OnModuleInit {
   // Helper Queries
   // ─────────────────────────────────────────────────────────────────────────
 
-  private async prismaEventLookup(serviceId: string, eventType: string) {
+  private async dbEventLookup(serviceId: string, eventType: string) {
     const eventTypeMap: Record<string, EventType> = {
       die: EventType.DIE,
       oom: EventType.OOM,

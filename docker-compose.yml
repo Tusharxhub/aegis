@@ -72,7 +72,7 @@ services:
       - BACKEND_PORT=3001
       - REDIS_URL=redis://aegis-redis:6379
       - AI_ENGINE_URL=http://aegis-ai-engine:8000
-      - DATABASE_URL=${DATABASE_URL}
+      - MONGO_URI=mongodb://aegis-mongo:27017/aegis
       - DOCKER_SOCKET_PATH=/var/run/docker.sock
       - FRONTEND_URL=http://localhost:3000
     volumes:
@@ -82,10 +82,13 @@ services:
         condition: service_healthy
       aegis-ai-engine:
         condition: service_healthy
+      aegis-mongo:
+        condition: service_started
     networks:
       - aegis-network
 
-  # 4. Cinematic Dashboard (Next.js 15)
+
+  # 5. Cinematic Dashboard (Next.js 15)
   aegis-frontend:
     build:
       context: ./frontend
@@ -102,7 +105,7 @@ services:
     networks:
       - aegis-network
 
-  # 5. Intentional Demo Crash Service (Chaos Engineering)
+  # 6. Intentional Demo Crash Service (Chaos Engineering)
   demo-crash-service:
     build:
       context: ./services/demo-crash-service
@@ -110,11 +113,11 @@ services:
     container_name: demo-crash-service
     restart: unless-stopped
     ports:
-      - "3002:3001"
+      - "3002:3000"
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 128M
     networks:
       - aegis-network
 

@@ -179,39 +179,33 @@ cd frontend && npm run dev
 
 ---
 
-## ⚡ Live Chaos Simulation
+## 💥 Live Chaos Simulation
 
-You can trigger intentional infrastructure failures to observe Aegis's autonomous self-healing in real-time. Use the following commands (or the provided `Makefile`) to hit the endpoints of the `demo-crash-service` container:
+To test Aegis's autonomous self-healing loops, you can trigger specific microservice failures inside the running cluster. The `demo-crash-service` container exposes three endpoints on host port `3002` simulating realistic DevOps crashes:
 
-1. **Simulate Out of Memory (OOM) Kill (Exit Code 137):**
+1. **Simulate Out-Of-Memory (OOM) Kill**
    ```bash
-   make trigger-oom
-   # OR
-   curl -X GET http://localhost:3002/crash/oom
+   curl http://localhost:3002/crash/oom
    ```
-   *Effect: Rapidly allocates memory in a loop until the Linux kernel terminates the process.*
+   *Effect: Rapidly allocates memory arrays in a loop until Node.js crashes with a heap limit allocation failure. Aegis classifies the crash, verifies the `LOW` risk profile, and automatically restarts the container.*
 
-2. **Simulate Database Timeout / Deadlock:**
+2. **Simulate Database Timeout / Connection Lock**
    ```bash
-   make trigger-timeout
-   # OR
-   curl -X GET http://localhost:3002/crash/timeout
+   curl http://localhost:3002/crash/timeout
    ```
-   *Effect: Simulates an unrecoverable database lock and crashes the container safely.*
+   *Effect: Simulates an unrecoverable database connection lock and exits with a DB_TIMEOUT trace. Aegis catches the failure, validates it, and issues a restart.*
 
-3. **Simulate Port Binding Conflict on Startup:**
+3. **Simulate Port Binding Conflict on Startup**
    ```bash
-   make trigger-port
-   # OR
-   curl -X GET http://localhost:3002/crash/port
+   curl http://localhost:3002/crash/port
    ```
-   *Effect: Attempts to bind an already-used port, causing an immediate fatal startup error.*
+   *Effect: Attempts to bind an already-used port, causing an immediate fatal EADDRINUSE startup error. Because port conflicts cannot be healed by simple restarts, Aegis flags this as a `HIGH` risk plan, stops the container, and marks the service status as `DEGRADED` for manual operator oversight.*
 
-When triggered, the NestJS Orchestrator will intercept the Docker Daemon events, extract the stack traces, pass them to the RL Engine (via the Vector store), and execute the correct remediation sequence.
+When triggered, the NestJS Orchestrator will intercept the Docker Daemon events, extract the stack traces, pass them to the AI Engine for vectorization, and execute the correct remediation sequence.
 
 ---
 
-```md
+```
 ## 👨‍💻 Developed By
 
 ### **Tushar Kanti Dey**  

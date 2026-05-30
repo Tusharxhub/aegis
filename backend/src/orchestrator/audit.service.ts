@@ -1,42 +1,43 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service.js';
+import { MongoService } from '../mongo/mongo.service.js';
 import {
   ServiceStatus,
   EventType,
   RemediationStatus,
   ActionType,
   RiskLevel,
-} from '@prisma/client';
+} from '../common/interfaces/db-types.js';
 
 @Injectable()
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly mongoService: MongoService) {}
 
   /**
-   * Upsert a service container record in PostgreSQL.
+   * Upsert a service container record in MongoDB.
    */
   async upsertService(containerId: string, name: string, imageName: string, status: ServiceStatus, exitCode?: number) {
     try {
-      return await this.prisma.service.upsert({
-        where: { containerId },
-        update: {
-          status,
-          exitCode: exitCode ?? null,
-          lastSeenAt: new Date(),
+      return await this.mongoService.ServiceModel.findOneAndUpdate(
+        { containerId },
+        {
+          $set: {
+            status,
+            exitCode: exitCode ?? null,
+            lastSeenAt: new Date(),
+          },
+          $setOnInsert: {
+            name,
+            imageName,
+            restartCount: 0,
+          }
         },
-        create: {
-          containerId,
-          name,
-          imageName,
-          status,
-          exitCode: exitCode ?? null,
-        },
-      });
+        { upsert: true, new: true }
+      );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to upsert service ${name} in Postgres: ${msg}`);
+      this.logger.error(`Failed to upsert service ${name} in MongoDB: ${msg}`);
       throw err;
     }
   }
@@ -46,38 +47,34 @@ export class AuditService {
    */
   async logCrashEvent(serviceId: string, eventType: EventType, exitCode: number, logs: string, metadata: any) {
     try {
-      return await this.prisma.infrastructureEvent.create({
-        data: {
-          serviceId,
-          eventType,
-          exitCode,
-          rawLogs: logs,
-          metadata: metadata || {},
-        },
+      return await this.mongoService.EventModel.create({
+        service: serviceId,
+        eventType,
+        exitCode,
+        rawLogs: logs,
+        metadata: metadata || {},
+        timestamp: new Date(),
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to create crash event: ${msg}`);
+      this.logger.error(`Failed to create crash event in MongoDB: ${msg}`);
       throw err;
     }
   }
 
   /**
-   * Log SentenceTransformer embeddings to PostgreSQL.
+   * Log SentenceTransformer embeddings to MongoDB.
    */
   async logIncidentEmbedding(eventId: string, embedding: number[], incidentType: string) {
     try {
-      return await this.prisma.incidentEmbedding.create({
-        data: {
-          eventId,
-          embedding,
-          incidentType,
-        },
+      return await this.mongoService.EmbeddingModel.create({
+        event: eventId,
+        vector: embedding,
+        incidentType,
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to save incident embedding: ${msg}`);
-      // Return null, embedding log failure is non-blocking for healing
+      this.logger.error(`Failed to save incident embedding in MongoDB: ${msg}`);
       return null;
     }
   }
@@ -94,20 +91,18 @@ export class AuditService {
     reasoning: string,
   ) {
     try {
-      return await this.prisma.remediationPlan.create({
-        data: {
-          eventId,
-          aiAnalysis,
-          confidenceScore,
-          suggestedAction,
-          riskLevel,
-          reasoning,
-          status: RemediationStatus.PENDING,
-        },
+      return await this.mongoService.PlanModel.create({
+        event: eventId,
+        aiAnalysis,
+        confidenceScore,
+        suggestedAction,
+        riskLevel,
+        reasoning,
+        status: RemediationStatus.PENDING,
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to create remediation plan in DB: ${msg}`);
+      this.logger.error(`Failed to create remediation plan in MongoDB: ${msg}`);
       throw err;
     }
   }
@@ -117,16 +112,19 @@ export class AuditService {
    */
   async updatePlanStatus(planId: string, status: RemediationStatus, processingTimeMs?: number) {
     try {
-      return await this.prisma.remediationPlan.update({
-        where: { id: planId },
-        data: {
-          status,
-          processingTimeMs: processingTimeMs ?? undefined,
+      return await this.mongoService.PlanModel.findByIdAndUpdate(
+        planId,
+        {
+          $set: {
+            status,
+            processingTimeMs: processingTimeMs ?? undefined,
+          },
         },
-      });
+        { new: true },
+      );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to update remediation plan status: ${msg}`);
+      this.logger.error(`Failed to update remediation plan status in MongoDB: ${msg}`);
     }
   }
 
@@ -142,19 +140,17 @@ export class AuditService {
     errorMessage?: string,
   ) {
     try {
-      return await this.prisma.actionExecution.create({
-        data: {
-          planId,
-          actionTaken,
-          isSuccessful,
-          executionLogs,
-          durationMs,
-          errorMessage: errorMessage ?? null,
-        },
+      return await this.mongoService.ExecutionModel.create({
+        plan: planId,
+        actionTaken,
+        isSuccessful,
+        executionLogs,
+        durationMs,
+        errorMessage: errorMessage ?? null,
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to save action execution log: ${msg}`);
+      this.logger.error(`Failed to save action execution log in MongoDB: ${msg}`);
       throw err;
     }
   }
@@ -164,16 +160,14 @@ export class AuditService {
    */
   async logMetrics(cpuUsage: number, memoryUsage: number, diskUsage: number) {
     try {
-      return await this.prisma.metricsSnapshot.create({
-        data: {
-          cpuUsage,
-          memoryUsage,
-          diskUsage,
-        },
+      return await this.mongoService.MetricsModel.create({
+        cpuUsage,
+        memoryUsage,
+        diskUsage,
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to save metrics snapshot: ${msg}`);
+      this.logger.error(`Failed to save metrics snapshot in MongoDB: ${msg}`);
     }
   }
 
@@ -182,15 +176,12 @@ export class AuditService {
    */
   async getLatestEventForService(serviceId: string, eventType: EventType) {
     try {
-      return await this.prisma.infrastructureEvent.findFirst({
-        where: {
-          serviceId,
-          eventType,
-        },
-        orderBy: {
-          timestamp: 'desc',
-        },
-      });
+      return await this.mongoService.EventModel.findOne({
+        service: serviceId,
+        eventType,
+      })
+        .sort({ timestamp: -1 })
+        .exec();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Failed to retrieve latest event for service ${serviceId}: ${msg}`);

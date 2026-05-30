@@ -5,7 +5,7 @@
 
 /**
  * The action types the AI can suggest.
- * Maps directly to the Prisma ActionType enum.
+ * Maps directly to the ActionType enum.
  */
 export type SuggestedActionType =
   | 'restart'

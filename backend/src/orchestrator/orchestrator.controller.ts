@@ -1,10 +1,10 @@
 import { Controller, Post, Get, InternalServerErrorException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service.js';
+import { MongoService } from '../mongo/mongo.service.js';
 
 @Controller('orchestrator')
 export class OrchestratorController {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly mongoService: MongoService,
   ) {}
 
   /**
@@ -14,7 +14,6 @@ export class OrchestratorController {
   @Post('train')
   async triggerTraining(): Promise<any> {
     try {
-      // In custom classifier head, return online status
       return {
         success: true,
         message: "Project Aegis Custom MLP classification head is online and fully trained on CPU.",
@@ -33,19 +32,18 @@ export class OrchestratorController {
   @Get('episodes')
   async getRecentEpisodes(): Promise<any[]> {
     try {
-      const plans = await this.prisma.remediationPlan.findMany({
-        take: 50,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          event: {
-            include: {
-              service: true,
-            },
-          },
-        },
-      });
+      const plans = await this.mongoService.PlanModel.find()
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .populate({
+          path: 'event',
+          populate: {
+            path: 'service'
+          }
+        })
+        .exec();
 
-      // Map relational PostgreSQL tables to dashboard shape
+      // Map Mongoose documents to dashboard shape
       return plans.map((p) => {
         let actionIdx = 0; // IGNORE
         if (p.suggestedAction === 'RESTART_CONTAINER') {
@@ -54,16 +52,19 @@ export class OrchestratorController {
           actionIdx = 2;
         }
 
+        const event = p.event;
+        const service = event?.service;
+
         return {
-          _id: p.id,
+          _id: p._id.toString(),
           timestamp: p.createdAt.toISOString(),
-          containerName: p.event.service.name,
-          imageName: p.event.service.imageName,
-          eventType: p.event.eventType.toLowerCase(),
-          exitCode: p.event.exitCode ?? 0,
+          containerName: service?.name ?? 'unknown',
+          imageName: service?.imageName ?? 'unknown',
+          eventType: event?.eventType?.toLowerCase() ?? 'die',
+          exitCode: event?.exitCode ?? 0,
           action_taken: actionIdx,
           reward: p.confidenceScore, // Display ML confidence score
-          state_vector: [p.confidenceScore, p.event.exitCode ?? 0],
+          state_vector: [p.confidenceScore, event?.exitCode ?? 0],
         };
       });
     } catch (error: unknown) {
@@ -78,7 +79,7 @@ export class OrchestratorController {
   @Get('services')
   async getServices(): Promise<any[]> {
     try {
-      return await this.prisma.service.findMany();
+      return await this.mongoService.ServiceModel.find().exec();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       throw new InternalServerErrorException(`Failed to retrieve services: ${message}`);

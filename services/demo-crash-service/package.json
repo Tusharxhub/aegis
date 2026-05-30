@@ -1,12 +1,12 @@
 {
   "name": "demo-crash-service",
   "version": "1.0.0",
-  "description": "Chaos Engineering Container for Aegis",
-  "main": "index.js",
+  "description": "Chaos Engineering Crash Target for Aegis",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2"
+    "express": "^4.19.2"
   }
 }
