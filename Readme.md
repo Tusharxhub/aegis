@@ -14,24 +14,25 @@ It includes a native Markdown Mermaid diagram so the architecture visualizes aut
 [![Ollama](https://img.shields.io/badge/Local_AI-Ollama-white?style=flat&logo=ollama)](https://ollama.com/)
 [![Prisma](https://img.shields.io/badge/Prisma-ORM-2d3748?style=flat&logo=prisma)](https://www.prisma.io/)
 
-Aegis is an air-gapped, AI-powered Site Reliability Engineering (SRE) platform. It continuously monitors microservices, detects critical infrastructure failures in real-time, leverages localized Large Language Models (LLMs) to diagnose the root cause, and executes automated mitigation commands—healing the system before human intervention is required.
+Aegis is your always-on SRE sidekick that runs entirely on your hardware. It keeps a watchful eye on your microservices, spots problems the moment they happen, uses local AI to figure out what went wrong, and fixes things automatically—often before you even notice something broke.
 
-Unlike standard API-wrapper projects, **Aegis runs its AI inference entirely locally** via Ollama and containerized GPUs, ensuring zero data leakage, zero API latency, and true decentralized operational autonomy.
+Best part? **Everything stays on your machine.** No cloud APIs, no data leaving your server, no waiting for external services. Just pure, self-healing infrastructure running right there in your Docker setup.
 
 ---
 
 ## 🚀 The Core Philosophy: "The Infinity Loop"
-Traditional DevOps requires humans to monitor logs, deduce problems, and deploy fixes. Aegis automates the entire incident-response lifecycle:
-1. **Observe:** Monitors the Docker UNIX socket for container deaths, OOM (Out of Memory) kills, or unhealthiness.
-2. **Analyze:** Reroutes live logs to a local LLM (Qwen 2.5 Coder or Llama 3) configured to return strict, deterministic JSON remediation plans.
-3. **Execute:** Bypasses human approval (based on AI confidence scoring) to execute root-level Docker commands (`restart`, `scale`, `rollback`).
-4. **Report:** Logs the audit trail to PostgreSQL and streams the UI update via WebSockets.
+Traditionally, someone's gotta stay up at night watching logs, scratching their head, and manually restarting services. Aegis changes that game:
+
+1. **Observe:** Watches your containers 24/7. Detects when something crashes, runs out of memory, or just starts acting weird.
+2. **Analyze:** Sends the problem to a local AI model (Qwen 2.5 Coder or Llama 3) that figures out exactly what went wrong.
+3. **Execute:** If the AI is confident enough, it doesn't wait around—it goes ahead and fixes it automatically (restarts, scales, rolls back, whatever's needed).
+4. **Report:** Keeps a full audit trail in the database and updates your dashboard in real-time so you're never in the dark.
 
 ---
 
 ## 🏗️ Deep Architecture
 
-Aegis relies on an event-driven, non-blocking microservice architecture to ensure that heavy machine learning inferences do not halt infrastructure monitoring.
+Aegis uses a smart, event-driven design so that heavy AI thinking doesn't slow down your monitoring. Everything runs asynchronously—the system keeps watching your infrastructure while the brain is busy thinking in the background.
 
 ### System Flow Diagram
 *(This diagram renders natively on GitHub)*
@@ -84,23 +85,23 @@ graph TD
 
 ```
 
-### The Stack Breakdown
+### What We Built With
 
-* **The Controller (Backend):** NestJS (TypeScript), `dockerode` (Docker API), BullMQ + Redis.
-* **The Brain (AI Inference):** Ollama, NVIDIA Container Toolkit (for local GPU passthrough).
-* **The Ledger (Database):** PostgreSQL, Prisma ORM.
-* **The Dashboard (Frontend):** Next.js (React), Tailwind CSS, Socket.io-client.
+* **The Brains (Backend):** NestJS handles all the orchestration, talks to Docker, and queues up tasks using BullMQ.
+* **The Thinker (AI):** Ollama runs your local AI model—no external APIs, just pure local inference on your GPU.
+* **The Memory (Database):** PostgreSQL stores everything, and Prisma keeps the queries clean and type-safe.
+* **The Face (Frontend):** A sleek Next.js dashboard that streams updates in real-time so you can see exactly what's happening.
 
 ---
 
 ## ⚡ Hardware & System Requirements
 
-Because Aegis utilizes local LLM inference, it requires hardware capable of running an AI model efficiently.
+Since Aegis thinks locally with real AI models, you'll need some decent hardware.
 
-* **OS:** Linux natively (e.g., Fedora, Ubuntu) or WSL2 on Windows.
-* **Compute:** A dedicated GPU is highly recommended for real-time healing (e.g., NVIDIA RTX series / ASUS TUF Gaming rigs).
-* **Drivers:** NVIDIA Drivers and the `nvidia-container-toolkit` must be installed to allow the Ollama Docker container to access the host GPU.
-* **Dependencies:** Docker Engine, Docker Compose, Node.js (v18+).
+* **OS:** Linux (Ubuntu, Fedora, etc.) or WSL2 on Windows—that's where Docker shines.
+* **GPU:** Honestly, you'll want a real GPU for this. NVIDIA RTX cards work great. Without one, inference gets slow fast.
+* **Drivers:** You'll need NVIDIA drivers and the `nvidia-container-toolkit` so Ollama can actually use your GPU.
+* **Basics:** Docker, Docker Compose, Node.js 18+, and Redis. Pretty standard modern stack stuff.
 
 ---
 
@@ -164,25 +165,23 @@ cd frontend && npm run dev
 
 ---
 
-## 🧪 Simulation & Testing
+## 🧪 See It In Action
 
-To demonstrate Aegis during a live review, the project includes a "Chaos Script" that intentionally damages a dummy container.
+Want to watch Aegis work its magic? We included a chaos script that deliberately breaks a test container.
 
-1. Navigate to the Aegis Dashboard (`http://localhost:3000`).
-2. Run the chaos script to simulate a memory leak:
+1. Open up the dashboard at `http://localhost:3000`.
+2. Trigger a controlled failure:
 ```bash
 npm run simulate:oom
-
 ```
 
-
-3. Watch the dashboard as Aegis detects the failure, streams the AI diagnosis in real-time, and issues the restart command via Docker—restoring the node to a healthy state automatically.
+3. Sit back and watch. You'll see Aegis spot the problem, the AI figure out what happened, and the system automatically heal itself—all in real-time on your screen.
 
 ---
 
-## 👨‍💻 Developed By
+## 👨‍💻 Who Built This
 
-Built as a comprehensive 4th-Year B.Tech Computer Science Engineering project, engineered to showcase enterprise-level Full Stack Development, DevOps automation, and localized AI infrastructure.
+This is a 4th-year Computer Science project, built from scratch to show what's possible when you combine full-stack development, real DevOps thinking, and local AI. It's the kind of thing you'd see in production, not just in a lab.
 
 ```
 
