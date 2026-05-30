@@ -1,13 +1,62 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+model Service {
+  id          String   @id @default(uuid())
+  name        String
+  containerId String   @unique
+  status      String   // "HEALTHY", "DEGRADED", "OFFLINE"
+  
+  events      InfrastructureEvent[]
+  actions     ActionExecution[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model InfrastructureEvent {
+  id          String   @id @default(uuid())
+  serviceId   String
+  service     Service  @relation(fields: [serviceId], references: [id])
+  
+  eventType   String   // e.g., "CONTAINER_DIE", "OOM_KILLED"
+  rawLogs     String   @db.Text
+  timestamp   DateTime @default(now())
+
+  remediation RemediationPlan?
+}
+
+model RemediationPlan {
+  id              String   @id @default(uuid())
+  eventId         String   @unique
+  event           InfrastructureEvent @relation(fields: [eventId], references: [id])
+  
+  aiAnalysis      String   @db.Text 
+  confidenceScore Float    
+  suggestedAction String   // e.g., "RESTART", "SCALE"
+  status          String   // "PENDING", "APPROVED", "REJECTED"
+  
+  createdAt       DateTime @default(now())
+  
+  execution       ActionExecution?
+}
+
+model ActionExecution {
+  id              String   @id @default(uuid())
+  planId          String   @unique
+  plan            RemediationPlan @relation(fields: [planId], references: [id])
+  
+  serviceId       String
+  service         Service  @relation(fields: [serviceId], references: [id])
+  
+  actionTaken     String   
+  isSuccessful    Boolean  
+  executionLogs   String?  @db.Text 
+  
+  executedAt      DateTime @default(now())
 }
