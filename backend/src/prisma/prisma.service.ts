@@ -4,7 +4,18 @@ import {
   OnModuleDestroy,
   Logger,
 } from '@nestjs/common';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
+
+function createPrismaAdapter(): PrismaPg {
+  const connectionString = process.env.DATABASE_URL;
+
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is not set');
+  }
+
+  return new PrismaPg({ connectionString });
+}
 
 /**
  * Prisma service wrapping the PrismaClient lifecycle.
@@ -20,6 +31,7 @@ export class PrismaService
 
   constructor() {
     super({
+      adapter: createPrismaAdapter(),
       log: [
         { emit: 'event', level: 'query' },
         { emit: 'event', level: 'error' },
