@@ -7,56 +7,47 @@ datasource db {
 }
 
 model Service {
-  id          String   @id @default(uuid())
+  id          String @id @default(uuid())
   name        String
-  containerId String   @unique
-  status      String   // "HEALTHY", "DEGRADED", "OFFLINE"
-  
-  events      InfrastructureEvent[]
-  actions     ActionExecution[]
+  containerId String @unique
+  status      String
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  events InfrastructureEvent[]
 }
 
 model InfrastructureEvent {
-  id          String   @id @default(uuid())
-  serviceId   String
-  service     Service  @relation(fields: [serviceId], references: [id])
-  
-  eventType   String   // e.g., "CONTAINER_DIE", "OOM_KILLED"
-  rawLogs     String   @db.Text
-  timestamp   DateTime @default(now())
+  id        String  @id @default(uuid())
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  eventType String
+  rawLogs   String   @db.Text
+  timestamp DateTime @default(now())
 
   remediation RemediationPlan?
 }
 
 model RemediationPlan {
-  id              String   @id @default(uuid())
-  eventId         String   @unique
-  event           InfrastructureEvent @relation(fields: [eventId], references: [id])
-  
-  aiAnalysis      String   @db.Text 
-  confidenceScore Float    
-  suggestedAction String   // e.g., "RESTART", "SCALE"
-  status          String   // "PENDING", "APPROVED", "REJECTED"
-  
-  createdAt       DateTime @default(now())
-  
-  execution       ActionExecution?
+  id      String              @id @default(uuid())
+  eventId String              @unique
+  event   InfrastructureEvent @relation(fields: [eventId], references: [id])
+
+  aiAnalysis      String @db.Text
+  confidenceScore Float
+  suggestedAction String
+  status          String
+
+  execution ActionExecution?
 }
 
 model ActionExecution {
-  id              String   @id @default(uuid())
-  planId          String   @unique
-  plan            RemediationPlan @relation(fields: [planId], references: [id])
-  
-  serviceId       String
-  service         Service  @relation(fields: [serviceId], references: [id])
-  
-  actionTaken     String   
-  isSuccessful    Boolean  
-  executionLogs   String?  @db.Text 
-  
-  executedAt      DateTime @default(now())
+  id     String          @id @default(uuid())
+  planId String          @unique
+  plan   RemediationPlan @relation(fields: [planId], references: [id])
+
+  actionTaken   String
+  isSuccessful  Boolean
+  executionLogs String? @db.Text
+
+  executedAt DateTime @default(now())
 }
