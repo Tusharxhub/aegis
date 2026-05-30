@@ -71,6 +71,9 @@ export function useSocket(): UseSocketReturn {
   useEffect(() => {
     const socket = getSocket();
     socketRef.current = socket;
+    if (typeof window !== 'undefined') {
+      (window as any).__aegis_socket__ = socket;
+    }
 
     // ── Connection Events ──────────────────────────────────────────────
     socket.on('connect', () => {
