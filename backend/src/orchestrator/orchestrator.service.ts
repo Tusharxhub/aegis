@@ -137,6 +137,10 @@ export class OrchestratorService implements OnModuleInit {
     const { event, serviceId } = job.data;
 
     try {
+      if (!serviceId) {
+        throw new Error('Service ID is required in job data');
+      }
+
       // 1. Retrieve the latest infrastructure event from MongoDB
       const infraEvent = await this.mongoService.EventModel.findOne({
         serviceId,

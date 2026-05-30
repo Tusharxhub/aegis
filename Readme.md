@@ -179,14 +179,22 @@ cd frontend && npm run dev
 
 ---
 
+```md
 ## 👨‍💻 Developed By
 
-**Tushar Kanti Dey** *Full Stack Developer & DevOps Engineer*
+### **Tushar Kanti Dey**  
+*Full Stack Developer • DevOps Engineer • AI Infrastructure Enthusiast*
 
-Built as a definitive capstone project for the B.Tech Computer Science and Engineering program at Adamas University. Aegis was engineered to bridge the gap between deterministic DevOps orchestration and predictive Machine Learning, proving the viability of autonomous, localized infrastructure operation.
+Aegis was developed as a capstone project for the Bachelor of Technology (B.Tech) program in Computer Science & Engineering at Adamas University.
 
-📧 [Email]() | 🔗 [GitHub](https://github.com/Tusharxhub) | 📸 [Instagram](https://www.instagram.com/tushardevx01/)
+The project was engineered to explore the convergence of autonomous infrastructure orchestration, real-time observability, and localized artificial intelligence systems. Its primary objective is to demonstrate how modern DevOps environments can evolve from passive monitoring systems into intelligent self-healing platforms capable of deterministic recovery and autonomous operational decision-making.
 
-```
+---
 
+### Connect
+
+- 📧 Email: t.k.d.dey2033929837@gmail.com
+- 🔗 GitHub: https://github.com/Tusharxhub
+- 🌐 Portfolio: https://www.tushardevx01.tech
+- 📸 Instagram: https://www.instagram.com/tushardevx01/
 ```
