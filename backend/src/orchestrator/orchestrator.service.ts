@@ -187,7 +187,7 @@ export class OrchestratorService implements OnModuleInit {
         diagnosis.incidentType,
       );
 
-      // 4. Save Remediation Plan to Postgres
+      // 4. Save Remediation Plan to MongoDB
       const planActionMap: Record<string, ActionType> = {
         RESTART_CONTAINER: ActionType.RESTART_CONTAINER,
         STOP_CONTAINER: ActionType.STOP_CONTAINER,

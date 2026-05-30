@@ -9,7 +9,7 @@ import type {
   ServiceNode,
 } from '@/types';
 
-// Updated interfaces matching Postgres-Prisma and Custom AI schemas
+// Updated interfaces matching MongoDB-Mongoose and Custom AI schemas
 export interface WsIncidentDetected {
   readonly id: string;
   readonly containerId: string;
@@ -129,7 +129,7 @@ export function useSocket(): UseSocketReturn {
       setUptime(data.uptime);
     });
 
-    // ── Incident Detected (Postgres Watchman Interceptor) ──────────────
+    // ── Incident Detected (MongoDB Watchman Interceptor) ──────────────
     socket.on('incident.detected', (data: WsIncidentDetected) => {
       setRecentEvents((prev) => {
         const next = [data, ...prev];
