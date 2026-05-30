@@ -1,20 +1,47 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# Project Aegis — Docker Compose
-# Only the Ollama inference container is orchestrated here.
-# Postgres is handled by Neon DB (serverless) and Redis by Upstash (serverless).
-# ─────────────────────────────────────────────────────────────────────────────
+version: '3.8'
 
 services:
-  ollama:
+  # 1. MongoDB (Replay Buffer & Audit State)
+  aegis-mongo:
+    image: mongo:6.0
+    container_name: aegis-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - aegis-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. Redis (BullMQ queue management)
+  aegis-redis:
+    image: redis:7.0-alpine
+    container_name: aegis-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - aegis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 3. Ollama (GPU-enabled embeddings provider)
+  aegis-ollama:
     image: ollama/ollama:latest
     container_name: aegis-ollama
     restart: unless-stopped
     ports:
-      - "${OLLAMA_PORT:-11434}:11434"
-    environment:
-      OLLAMA_HOST: "0.0.0.0:11434"
-      OLLAMA_KEEP_ALIVE: "24h"
-      OLLAMA_NUM_PARALLEL: "4"
+      - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     deploy:
@@ -25,24 +52,99 @@ services:
               count: all
               capabilities:
                 - gpu
-        limits:
-          memory: 16G
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    networks:
+      - aegis-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
-      interval: 30s
+      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
+      interval: 15s
       timeout: 10s
       retries: 5
-      start_period: 60s
-    logging:
-      driver: json-file
-      options:
-        max-size: "50m"
-        max-file: "3"
+
+  # 4. Python Reinforcement Learning Brain
+  aegis-rl-brain:
+    build:
+      context: ./rl-agent
+      dockerfile: Dockerfile
+    container_name: aegis-rl-brain
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - AEGIS_INTERNAL_KEY=your_secure_dev_key
+      - MONGO_URI=mongodb://aegis-mongo:27017/aegis
+      - MODEL_PATH=/app/models/ppo_aegis_model
+    volumes:
+      - rl_model_data:/app/models
+    depends_on:
+      aegis-mongo:
+        condition: service_healthy
+    networks:
+      - aegis-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f -H \"X-Aegis-Auth-Token: your_secure_dev_key\" http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # 5. NestJS Orchestrator
+  aegis-nestjs:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aegis-nestjs
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - AEGIS_INTERNAL_KEY=your_secure_dev_key
+      - MONGO_URI=mongodb://aegis-mongo:27017/aegis
+      - REDIS_URL=redis://aegis-redis:6379
+      - OLLAMA_API_URL=http://aegis-ollama:11434
+      - RL_BRAIN_URL=http://aegis-rl-brain:8000
+      - DOCKER_SOCKET_PATH=/var/run/docker.sock
+      - FRONTEND_URL=http://localhost:3000
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      aegis-mongo:
+        condition: service_healthy
+      aegis-redis:
+        condition: service_healthy
+      aegis-ollama:
+        condition: service_healthy
+      aegis-rl-brain:
+        condition: service_healthy
+    networks:
+      - aegis-network
+
+  # 6. Next.js Cinematic Frontend
+  aegis-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: aegis-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_SOCKET_URL=http://localhost:3001
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+    depends_on:
+      - aegis-nestjs
     networks:
       - aegis-network
 
 volumes:
+  mongo_data:
+    driver: local
+  redis_data:
+    driver: local
   ollama_data:
+    driver: local
+  rl_model_data:
     driver: local
 
 networks:

@@ -29,8 +29,11 @@ export const OLLAMA_REQUEST_TIMEOUT_MS = 120_000;
 /** Containers to ignore when watching for crashes (Aegis infra containers). */
 export const IGNORED_CONTAINERS: readonly string[] = [
   'aegis-ollama',
-  'aegis-postgres',
+  'aegis-mongo',
   'aegis-redis',
+  'aegis-rl-brain',
+  'aegis-nestjs',
+  'aegis-frontend',
 ] as const;
 
 /** Maximum job retry attempts in BullMQ. */
