@@ -1,188 +1,360 @@
-Here is the fully expanded, highly detailed `README.md` updated to reflect the local, air-gapped AI architecture using Ollama. This version is designed to look like a heavy-duty, enterprise-grade open-source project.
+# Aegis 🛡️
 
-It includes a native Markdown Mermaid diagram so the architecture visualizes automatically when uploaded to GitHub.
+### Autonomous Self-Healing DevOps Infrastructure
 
----
+[![Next.js](https://img.shields.io/badge/Next.js-14-black?style=flat\&logo=next.js)](https://nextjs.org/)
+[![NestJS](https://img.shields.io/badge/NestJS-10-ea2845?style=flat\&logo=nestjs)](https://nestjs.com/)
+[![Docker](https://img.shields.io/badge/Docker-Engine-2496ed?style=flat\&logo=docker)](https://www.docker.com/)
+[![Ollama](https://img.shields.io/badge/Local_AI-Ollama-white?style=flat\&logo=ollama)](https://ollama.com/)
+[![Prisma](https://img.shields.io/badge/Prisma-ORM-2d3748?style=flat\&logo=prisma)](https://www.prisma.io/)
 
-```markdown
-# Aegis 🛡️ 
-**Autonomous Self-Healing DevOps Infrastructure**
+Aegis is an autonomous DevOps monitoring and self-healing platform built for modern containerized infrastructure. It continuously monitors Docker-based services, detects failures in real time, analyzes incidents using local AI models running through Ollama, and automatically executes recovery actions without depending on external cloud APIs.
 
-[![Next.js](https://img.shields.io/badge/Next.js-14-black?style=flat&logo=next.js)](https://nextjs.org/)
-[![NestJS](https://img.shields.io/badge/NestJS-10-ea2845?style=flat&logo=nestjs)](https://nestjs.com/)
-[![Docker](https://img.shields.io/badge/Docker-Engine-2496ed?style=flat&logo=docker)](https://www.docker.com/)
-[![Ollama](https://img.shields.io/badge/Local_AI-Ollama-white?style=flat&logo=ollama)](https://ollama.com/)
-[![Prisma](https://img.shields.io/badge/Prisma-ORM-2d3748?style=flat&logo=prisma)](https://www.prisma.io/)
+Everything runs locally. Logs, AI inference, monitoring, recovery workflows, and analytics all stay inside your own infrastructure. No external telemetry, no vendor lock-in, and no data leaving your machine.
 
-Aegis is your always-on SRE sidekick that runs entirely on your hardware. It keeps a watchful eye on your microservices, spots problems the moment they happen, uses local AI to figure out what went wrong, and fixes things automatically—often before you even notice something broke.
-
-Best part? **Everything stays on your machine.** No cloud APIs, no data leaving your server, no waiting for external services. Just pure, self-healing infrastructure running right there in your Docker setup.
+This project combines DevOps automation, distributed systems concepts, local LLM orchestration, real-time observability, and full-stack engineering into a production-style platform.
 
 ---
 
-## 🚀 The Core Philosophy: "The Infinity Loop"
-Traditionally, someone's gotta stay up at night watching logs, scratching their head, and manually restarting services. Aegis changes that game:
+# 🚀 Core Workflow
 
-1. **Observe:** Watches your containers 24/7. Detects when something crashes, runs out of memory, or just starts acting weird.
-2. **Analyze:** Sends the problem to a local AI model (Qwen 2.5 Coder or Llama 3) that figures out exactly what went wrong.
-3. **Execute:** If the AI is confident enough, it doesn't wait around—it goes ahead and fixes it automatically (restarts, scales, rolls back, whatever's needed).
-4. **Report:** Keeps a full audit trail in the database and updates your dashboard in real-time so you're never in the dark.
+Aegis follows a fully autonomous event-driven recovery cycle:
+
+### 1. Observe
+
+The monitoring engine watches Docker containers continuously and detects:
+
+* Container crashes
+* Out-of-memory failures
+* Restart loops
+* High CPU or memory spikes
+* Service health-check failures
+* Timeout issues
+* Abnormal runtime behavior
+
+### 2. Analyze
+
+Once a failure is detected:
+
+* Logs are collected automatically
+* Runtime metadata is extracted
+* The incident is forwarded to a local AI model
+* The AI determines the probable root cause
+* A structured recovery plan is generated
+
+### 3. Execute
+
+If the confidence score crosses the configured threshold, Aegis can:
+
+* Restart containers
+* Scale services
+* Roll back unhealthy deployments
+* Kill stuck processes
+* Recreate containers
+* Trigger fallback workflows
+
+### 4. Report
+
+Every action is tracked and stored:
+
+* Full audit logs
+* AI reasoning history
+* Recovery timeline
+* Real-time dashboard updates
+* Infrastructure analytics
 
 ---
 
-## 🏗️ Deep Architecture
+# 🏗️ System Architecture
 
-Aegis uses a smart, event-driven design so that heavy AI thinking doesn't slow down your monitoring. Everything runs asynchronously—the system keeps watching your infrastructure while the brain is busy thinking in the background.
+Aegis uses an asynchronous event-driven architecture to ensure monitoring remains lightweight even while AI analysis is running in the background.
 
-### System Flow Diagram
-*(This diagram renders natively on GitHub)*
+## Architecture Flow
 
 ```mermaid
 graph TD
-    %% Define Nodes
-    subgraph Host OS [Host Machine / Linux Server]
-        DockerSocket[Docker Daemon /var/run/docker.sock]
-        BrokenService[Failing Microservice Container]
+
+    subgraph Host["Host Machine / Linux Server"]
+        DockerSocket["Docker Daemon"]
+        BrokenService["Failing Container"]
     end
 
-    subgraph The Orchestrator [NestJS Backend]
-        Watcher[Docker Watcher Service]
-        Queue[BullMQ / Redis Event Queue]
-        Executor[Action Execution Engine]
+    subgraph Backend["NestJS Orchestrator"]
+        Watcher["Docker Watcher Service"]
+        Queue["BullMQ + Redis Queue"]
+        Executor["Execution Engine"]
     end
 
-    subgraph The Brain [Air-gapped AI]
-        Ollama[Ollama Container]
-        Model[Llama 3 / Qwen Coder]
+    subgraph AI["Local AI Runtime"]
+        Ollama["Ollama"]
+        Model["Qwen / Llama Models"]
     end
 
-    subgraph State & Observability [Data Layer]
-        DB[(PostgreSQL)]
-        Prisma[Prisma ORM]
+    subgraph Data["State & Persistence"]
+        Prisma["Prisma ORM"]
+        DB["PostgreSQL"]
     end
 
-    subgraph UI [Next.js Control Center]
-        Dashboard[Glassmorphism Dashboard]
+    subgraph Frontend["Next.js Dashboard"]
+        Dashboard["Realtime Monitoring UI"]
     end
 
-    %% Define Flow
-    BrokenService -- "Crashes (OOM, Timeout)" --> DockerSocket
-    DockerSocket -- "Emits 'die' event & Logs" --> Watcher
-    Watcher -- "Pushes job" --> Queue
-    Queue -- "Pulls job asynchronously" --> Executor
-    Executor -- "Prompts with strict JSON schema" --> Ollama
-    Ollama -- "Runs inference on GPU" --> Model
-    Model -- "Returns { action: 'restart' }" --> Ollama
-    Ollama -- "Passes JSON Plan" --> Executor
-    
-    %% Execution & State
-    Executor -- "Executes mitigation" --> DockerSocket
-    Executor -- "Saves Audit Trail" --> Prisma
-    Prisma -- "Writes" --> DB
-    
-    %% Real-time update
-    Executor -- "Emits WebSocket Event" --> Dashboard
+    BrokenService --> DockerSocket
+    DockerSocket --> Watcher
+    Watcher --> Queue
+    Queue --> Executor
+    Executor --> Ollama
+    Ollama --> Model
+    Model --> Ollama
+    Ollama --> Executor
 
+    Executor --> DockerSocket
+    Executor --> Prisma
+    Prisma --> DB
+
+    Executor --> Dashboard
 ```
 
-### What We Built With
+---
 
-* **The Brains (Backend):** NestJS handles all the orchestration, talks to Docker, and queues up tasks using BullMQ.
-* **The Thinker (AI):** Ollama runs your local AI model—no external APIs, just pure local inference on your GPU.
-* **The Memory (Database):** PostgreSQL stores everything, and Prisma keeps the queries clean and type-safe.
-* **The Face (Frontend):** A sleek Next.js dashboard that streams updates in real-time so you can see exactly what's happening.
+# ⚙️ Tech Stack
+
+## Frontend
+
+* Next.js 14
+* TypeScript
+* Tailwind CSS
+* Framer Motion
+* WebSockets
+* Recharts
+
+## Backend
+
+* NestJS
+* BullMQ
+* Redis
+* Docker API
+* WebSocket Gateway
+
+## AI Layer
+
+* Ollama
+* Qwen 2.5 Coder
+* Llama 3
+
+## Database
+
+* PostgreSQL
+* Prisma ORM
+
+## Infrastructure
+
+* Docker
+* Docker Compose
+* NVIDIA Container Toolkit
 
 ---
 
-## ⚡ Hardware & System Requirements
+# 🔥 Key Features
 
-Since Aegis thinks locally with real AI models, you'll need some decent hardware.
+## Autonomous Recovery
 
-* **OS:** Linux (Ubuntu, Fedora, etc.) or WSL2 on Windows—that's where Docker shines.
-* **GPU:** Honestly, you'll want a real GPU for this. NVIDIA RTX cards work great. Without one, inference gets slow fast.
-* **Drivers:** You'll need NVIDIA drivers and the `nvidia-container-toolkit` so Ollama can actually use your GPU.
-* **Basics:** Docker, Docker Compose, Node.js 18+, and Redis. Pretty standard modern stack stuff.
+Automatically detects and resolves infrastructure failures.
+
+## Local AI Analysis
+
+Uses fully offline local LLMs for root-cause analysis.
+
+## Real-Time Monitoring
+
+Live dashboard updates through WebSockets.
+
+## Event Queue System
+
+Asynchronous task processing with BullMQ and Redis.
+
+## Infrastructure Audit Trail
+
+Every AI decision and recovery action is stored permanently.
+
+## GPU-Accelerated Inference
+
+Runs AI inference locally using NVIDIA GPUs.
+
+## Air-Gapped Deployment
+
+Works entirely without internet access.
+
+## Production-Oriented Design
+
+Built with scalable backend architecture and modular services.
 
 ---
 
-## 🛠️ Installation & Setup
+# 🖥️ System Requirements
 
-**1. Clone the Repository:**
+## Recommended Hardware
+
+| Component | Recommendation               |
+| --------- | ---------------------------- |
+| CPU       | Ryzen 7 / Intel i7 or higher |
+| RAM       | 16GB minimum                 |
+| GPU       | NVIDIA RTX Series            |
+| Storage   | SSD Recommended              |
+
+## Software Requirements
+
+* Linux (Ubuntu / Fedora preferred)
+* Docker Engine
+* Docker Compose
+* Node.js 18+
+* Redis
+* PostgreSQL
+* NVIDIA Drivers
+* NVIDIA Container Toolkit
+
+---
+
+# 📦 Installation
+
+## 1. Clone Repository
 
 ```bash
-git clone [https://github.com/yourusername/aegis.git](https://github.com/yourusername/aegis.git)
+git clone https://github.com/yourusername/aegis.git
 cd aegis
-
 ```
 
-**2. Setup the Environment:**
-Create a `.env` file in the root directory:
+---
+
+## 2. Configure Environment Variables
+
+Create a `.env` file:
 
 ```env
 DATABASE_URL="postgresql://aegis_user:password@localhost:5432/aegis_db"
+
 REDIS_URL="redis://localhost:6379"
+
 OLLAMA_HOST="http://localhost:11434"
-AI_CONFIDENCE_THRESHOLD="0.80" # Minimum confidence required for auto-execution
 
-```
-
-**3. Boot the Infrastructure (Database, Redis, AI Engine):**
-
-```bash
-docker-compose up -d
-
-```
-
-*Note: The `docker-compose.yml` mounts `/var/run/docker.sock` and allocates GPU resources to the Ollama container.*
-
-**4. Pull the Local AI Model:**
-Wait for the Ollama container to boot, then pull your preferred coding model:
-
-```bash
-docker exec -it aegis-ollama ollama run qwen2.5-coder:7b
-
-```
-
-**5. Initialize the Database:**
-
-```bash
-cd backend
-npx prisma generate
-npx prisma db push
-
-```
-
-**6. Start the Orchestrator & Dashboard:**
-
-```bash
-# Terminal 1: Start NestJS Backend
-cd backend && npm run start:dev
-
-# Terminal 2: Start Next.js Frontend
-cd frontend && npm run dev
-
+AI_CONFIDENCE_THRESHOLD="0.80"
 ```
 
 ---
 
-## 🧪 See It In Action
+## 3. Start Infrastructure
 
-Want to watch Aegis work its magic? We included a chaos script that deliberately breaks a test container.
+```bash
+docker-compose up -d
+```
 
-1. Open up the dashboard at `http://localhost:3000`.
-2. Trigger a controlled failure:
+This starts:
+
+* PostgreSQL
+* Redis
+* Ollama
+* Supporting containers
+
+---
+
+## 4. Pull AI Model
+
+```bash
+docker exec -it aegis-ollama ollama run qwen2.5-coder:7b
+```
+
+---
+
+## 5. Initialize Database
+
+```bash
+cd backend
+
+npx prisma generate
+
+npx prisma db push
+```
+
+---
+
+## 6. Start Backend
+
+```bash
+cd backend
+
+npm run start:dev
+```
+
+---
+
+## 7. Start Frontend
+
+```bash
+cd frontend
+
+npm run dev
+```
+
+---
+
+# 🧪 Failure Simulation
+
+Aegis includes a built-in chaos testing utility.
+
+## Trigger OOM Failure
+
 ```bash
 npm run simulate:oom
 ```
 
-3. Sit back and watch. You'll see Aegis spot the problem, the AI figure out what happened, and the system automatically heal itself—all in real-time on your screen.
+You can then watch:
+
+* Failure detection
+* AI analysis
+* Recovery execution
+* Dashboard updates
+
+in real time.
 
 ---
 
-## 👨‍💻 Who Built This
+# 📊 Future Improvements
 
-This is a 4th-year Computer Science project, built from scratch to show what's possible when you combine full-stack development, real DevOps thinking, and local AI. It's the kind of thing you'd see in production, not just in a lab.
+* Kubernetes support
+* Multi-node orchestration
+* Predictive anomaly detection
+* AI-generated recovery scripts
+* Distributed observability
+* Infrastructure graph visualization
+* SLA analytics
+* RBAC authentication
+* Multi-tenant support
 
-```
+---
 
-```
+# 👨‍💻 Project Vision
+
+Aegis was designed as a production-style DevOps platform that demonstrates how AI can move beyond chat interfaces and become an active infrastructure operator.
+
+The goal is to create an autonomous infrastructure layer capable of monitoring, reasoning, and recovering systems with minimal human intervention while keeping everything local, private, and controllable.
+
+This project combines:
+
+* Full-stack engineering
+* AI systems integration
+* DevOps automation
+* Distributed infrastructure concepts
+* Real-time monitoring
+* Event-driven architecture
+* Self-healing system design
+
+into a single platform built for modern infrastructure environments.
+
+---
+
+# 📬 Contact
+
+📧 [Email](mailto:t.k.d.dey2033929837@gmail.com)
+🔗 [GitHub](https://github.com/Tusharxhub)
+📸 [Instagram](https://www.instagram.com/tushardevx01/)
+
