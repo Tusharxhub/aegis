@@ -1,0 +1,6 @@
+fastapi==0.110.0
+uvicorn==0.28.0
+pymongo==4.6.2
+stable-baselines3==2.2.1
+numpy==1.26.4
+gymnasium==0.29.1

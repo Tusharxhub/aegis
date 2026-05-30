@@ -24,3 +24,6 @@ backend/coverage/
 # editor and tool state
 .vscode/
 .idea/
+
+# local Python environments
+rl-agent/.venv3.11/

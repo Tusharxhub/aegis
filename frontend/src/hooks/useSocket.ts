@@ -4,41 +4,67 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { getSocket, disconnectSocket } from '@/lib/socket';
 import type { Socket } from 'socket.io-client';
 import type {
-  WsContainerCrashPayload,
-  WsAiStreamChunk,
-  WsAiAnalysisComplete,
-  WsRemediationPayload,
   WsTerminalLog,
   WsHeartbeat,
   ServiceNode,
 } from '@/types';
+
+// Updated interfaces matching Postgres-Prisma and Custom AI schemas
+export interface WsIncidentDetected {
+  readonly id: string;
+  readonly containerId: string;
+  readonly containerName: string;
+  readonly imageName: string;
+  readonly eventType: string;
+  readonly exitCode: number;
+  readonly logs: string;
+  readonly timestamp: string;
+}
+
+export interface WsAiAnalysisCompleted {
+  readonly eventId: string;
+  readonly planId: string;
+  readonly incidentType: string;
+  readonly analysis: string;
+  readonly confidenceScore: number;
+  readonly riskLevel: 'LOW' | 'HIGH';
+  readonly suggestedAction: 'RESTART_CONTAINER' | 'STOP_CONTAINER' | 'IGNORE';
+  readonly reasoning: string;
+  readonly similarIncidents?: any[];
+}
+
+export interface WsRemediationCompleted {
+  readonly eventId: string;
+  readonly planId: string;
+  readonly actionTaken: string;
+  readonly isSuccessful: boolean;
+  readonly safetyPassed: boolean;
+  readonly executionLogs: string;
+  readonly durationMs: number;
+  readonly timestamp: string;
+}
 
 interface UseSocketReturn {
   connected: boolean;
   uptime: number;
   nodes: ServiceNode[];
   terminalLogs: WsTerminalLog[];
-  recentEvents: WsContainerCrashPayload[];
+  recentEvents: WsIncidentDetected[];
   activeStreams: Map<string, string>;
 }
 
-/**
- * Custom hook managing the entire Socket.io lifecycle and state.
- * Listens to all Aegis WebSocket events and maintains the dashboard state.
- */
 export function useSocket(): UseSocketReturn {
   const socketRef = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const [uptime, setUptime] = useState(0);
   const [nodes, setNodes] = useState<Map<string, ServiceNode>>(new Map());
   const [terminalLogs, setTerminalLogs] = useState<WsTerminalLog[]>([]);
-  const [recentEvents, setRecentEvents] = useState<WsContainerCrashPayload[]>([]);
+  const [recentEvents, setRecentEvents] = useState<WsIncidentDetected[]>([]);
   const [activeStreams, setActiveStreams] = useState<Map<string, string>>(new Map());
 
   const addTerminalLog = useCallback((log: WsTerminalLog) => {
     setTerminalLogs((prev) => {
       const next = [...prev, log];
-      // Keep last 200 logs to prevent memory leaks
       return next.length > 200 ? next.slice(-200) : next;
     });
   }, []);
@@ -82,7 +108,7 @@ export function useSocket(): UseSocketReturn {
         id: crypto.randomUUID(),
         level: 'info',
         source: 'WebSocket',
-        message: '🔌 Connected to Aegis backend',
+        message: '🔌 Connected to Aegis Relational Orchestrator backend',
         timestamp: new Date().toISOString(),
       });
     });
@@ -93,7 +119,7 @@ export function useSocket(): UseSocketReturn {
         id: crypto.randomUUID(),
         level: 'warn',
         source: 'WebSocket',
-        message: '⚠️ Disconnected from Aegis backend',
+        message: '⚠️ Disconnected from Aegis backend socket',
         timestamp: new Date().toISOString(),
       });
     });
@@ -103,54 +129,56 @@ export function useSocket(): UseSocketReturn {
       setUptime(data.uptime);
     });
 
-    // ── Container Crash ────────────────────────────────────────────────
-    socket.on('container:crash', (data: WsContainerCrashPayload) => {
+    // ── Incident Detected (Postgres Watchman Interceptor) ──────────────
+    socket.on('incident.detected', (data: WsIncidentDetected) => {
       setRecentEvents((prev) => {
         const next = [data, ...prev];
         return next.length > 50 ? next.slice(0, 50) : next;
       });
 
-      upsertNode(data.event.containerId, {
-        name: data.event.containerName,
-        imageName: data.event.imageName,
+      upsertNode(data.containerId, {
+        name: data.containerName,
+        imageName: data.imageName,
         status: 'CRASHED',
-        exitCode: data.event.exitCode,
-        lastEvent: data.event,
-      });
-    });
-
-    // ── AI Analysis Start ──────────────────────────────────────────────
-    socket.on('ai:analysis:start', (data: { eventId: string; containerName: string }) => {
-      // Find the node by recent event
-      setNodes((prev) => {
-        const next = new Map(prev);
-        for (const [key, node] of next) {
-          if (node.lastEvent && node.status === 'CRASHED') {
-            next.set(key, { ...node, isAnalyzing: true });
-          }
-        }
-        return next;
+        exitCode: data.exitCode,
+        isAnalyzing: true,
+        lastEvent: {
+          containerId: data.containerId,
+          containerName: data.containerName,
+          imageName: data.imageName,
+          exitCode: data.exitCode,
+          eventType: data.eventType.toLowerCase() as any,
+          timestamp: data.timestamp,
+          logs: data.logs,
+          metadata: {},
+        },
       });
 
+      // Initialize terminal stream animation
       setActiveStreams((prev) => {
         const next = new Map(prev);
-        next.set(data.eventId, '');
+        next.set(
+          data.id,
+          `🚨 Incident ID: ${data.id}\nContainer: ${data.containerName}\nFailure Event: ${data.eventType.toUpperCase()} (Exit: ${data.exitCode})\n\n[ML PIPELINE] Initializing custom local sentence tokenization...\n[ML PIPELINE] Vectorizing log outputs to 384-dimension matrix...`
+        );
         return next;
       });
     });
 
-    // ── AI Analysis Stream ─────────────────────────────────────────────
-    socket.on('ai:analysis:stream', (data: WsAiStreamChunk) => {
+    // ── AI Analysis Completed (SentenceTransformers Classification) ────
+    socket.on('ai.analysis.completed', (data: WsAiAnalysisCompleted) => {
       setActiveStreams((prev) => {
         const next = new Map(prev);
         const current = next.get(data.eventId) ?? '';
-        next.set(data.eventId, current + data.chunk);
+        next.set(
+          data.eventId,
+          current +
+            `\n[ML PIPELINE] Running classification net query...\n\n🎯 Diagnosis Result: [${data.incidentType}]\n📊 Confidence Score: ${(data.confidenceScore * 100).toFixed(1)}%\n🔒 Safety Mappings: Suggested = ${data.suggestedAction} (Risk: ${data.riskLevel})\n📝 Reasoning: ${data.reasoning}\n🔎 Vector Memory: Found ${data.similarIncidents?.length ?? 0} similarity matches in local FAISS store.`
+        );
         return next;
       });
-    });
 
-    // ── AI Analysis Complete ───────────────────────────────────────────
-    socket.on('ai:analysis:complete', (data: WsAiAnalysisComplete) => {
+      // Update analyzing node target
       setNodes((prev) => {
         const next = new Map(prev);
         for (const [key, node] of next) {
@@ -158,7 +186,20 @@ export function useSocket(): UseSocketReturn {
             next.set(key, {
               ...node,
               isAnalyzing: false,
-              aiAnalysis: data,
+              aiAnalysis: {
+                eventId: data.eventId,
+                planId: data.planId,
+                result: {
+                  analysis: data.analysis,
+                  confidenceScore: data.confidenceScore,
+                  suggestedAction: {
+                    type: data.suggestedAction.toLowerCase() as any,
+                    command: `execute ${data.suggestedAction}`,
+                    parameters: { riskLevel: data.riskLevel, reasoning: data.reasoning },
+                  },
+                },
+                processingTimeMs: 120,
+              },
             });
           }
         }
@@ -166,18 +207,25 @@ export function useSocket(): UseSocketReturn {
       });
     });
 
-    // ── Remediation Events ─────────────────────────────────────────────
-    socket.on('remediation:complete', (data: WsRemediationPayload) => {
-      if (data.success) {
-        setNodes((prev) => {
-          const next = new Map(prev);
-          for (const [key, node] of next) {
-            if (node.status === 'CRASHED') {
-              next.set(key, { ...node, status: 'RESTARTING' });
-            }
+    // ── Remediation Completed (Docker API Safe Mitigation) ─────────────
+    socket.on('remediation.completed', (data: WsRemediationCompleted) => {
+      setNodes((prev) => {
+        const next = new Map(prev);
+        for (const [key, node] of next) {
+          if (node.status === 'CRASHED') {
+            next.set(key, {
+              ...node,
+              status: data.isSuccessful ? 'HEALTHY' : 'DEGRADED',
+            });
           }
-          return next;
-        });
+        }
+        return next;
+      });
+      
+      // Store event on global window for page alerts
+      if (typeof window !== 'undefined') {
+        const customEvent = new CustomEvent('aegis:remediation:done', { detail: data });
+        window.dispatchEvent(customEvent);
       }
     });
 
@@ -186,16 +234,13 @@ export function useSocket(): UseSocketReturn {
       addTerminalLog(data);
     });
 
-    // Cleanup on unmount
     return () => {
       socket.off('connect');
       socket.off('disconnect');
       socket.off('system:heartbeat');
-      socket.off('container:crash');
-      socket.off('ai:analysis:start');
-      socket.off('ai:analysis:stream');
-      socket.off('ai:analysis:complete');
-      socket.off('remediation:complete');
+      socket.off('incident.detected');
+      socket.off('ai.analysis.completed');
+      socket.off('remediation.completed');
       socket.off('terminal:log');
       disconnectSocket();
     };

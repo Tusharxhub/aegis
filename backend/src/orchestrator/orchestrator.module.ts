@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { OrchestratorService } from './orchestrator.service.js';
-import { RlCoordinatorService } from './rl-coordinator.service.js';
+import { AuditService } from './audit.service.js';
+import { RemediationEngine } from './remediation.service.js';
 import { OrchestratorController } from './orchestrator.controller.js';
 import { DockerModule } from '../docker/docker.module.js';
 import { QueueModule } from '../queue/queue.module.js';
@@ -10,7 +11,11 @@ import { GatewayModule } from '../gateway/gateway.module.js';
 @Module({
   imports: [DockerModule, QueueModule, AiAgentModule, GatewayModule],
   controllers: [OrchestratorController],
-  providers: [OrchestratorService, RlCoordinatorService],
-  exports: [OrchestratorService, RlCoordinatorService],
+  providers: [
+    OrchestratorService,
+    AuditService,
+    RemediationEngine,
+  ],
+  exports: [OrchestratorService, AuditService, RemediationEngine],
 })
 export class OrchestratorModule {}
