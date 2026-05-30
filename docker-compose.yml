@@ -1,24 +1,7 @@
 version: '3.8'
 
 services:
-  # 1. MongoDB (Replay Buffer & Audit State)
-  aegis-mongo:
-    image: mongo:6.0
-    container_name: aegis-mongo
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    networks:
-      - aegis-network
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # 2. Redis (BullMQ queue management)
+  # 1. Relational Database & State Cache (Redis)
   aegis-redis:
     image: redis:7.0-alpine
     container_name: aegis-redis
@@ -31,64 +14,34 @@ services:
       - aegis-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
+      interval: 5s
+      timeout: 3s
       retries: 5
 
-  # 3. Ollama (GPU-enabled embeddings provider)
-  aegis-ollama:
-    image: ollama/ollama:latest
-    container_name: aegis-ollama
-    restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities:
-                - gpu
-    environment:
-      - OLLAMA_HOST=0.0.0.0:11434
-    networks:
-      - aegis-network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-
-  # 4. Python Reinforcement Learning Brain
-  aegis-rl-brain:
+  # 2. Custom AI Inference Engine (Python Sentence-Transformers & FAISS)
+  aegis-ai-engine:
     build:
-      context: ./rl-agent
+      context: ./services/ai-engine
       dockerfile: Dockerfile
-    container_name: aegis-rl-brain
+    container_name: aegis-ai-engine
     restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
-      - AEGIS_INTERNAL_KEY=your_secure_dev_key
-      - MONGO_URI=mongodb://aegis-mongo:27017/aegis
-      - MODEL_PATH=/app/models/ppo_aegis_model
+      - PORT=8000
+      - HOST=0.0.0.0
     volumes:
-      - rl_model_data:/app/models
-    depends_on:
-      aegis-mongo:
-        condition: service_healthy
+      - ai_model_store:/app/models
+      - ai_vector_store:/app/vectorstore/storage
     networks:
       - aegis-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -f -H \"X-Aegis-Auth-Token: your_secure_dev_key\" http://localhost:8000/health || exit 1"]
-      interval: 15s
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
       timeout: 5s
       retries: 3
 
-  # 5. NestJS Orchestrator
+  # 3. SRE Orchestrator (NestJS)
   aegis-nestjs:
     build:
       context: ./backend
@@ -99,28 +52,23 @@ services:
       - "3001:3001"
     environment:
       - NODE_ENV=production
-      - AEGIS_INTERNAL_KEY=your_secure_dev_key
-      - MONGO_URI=mongodb://aegis-mongo:27017/aegis
+      - BACKEND_PORT=3001
       - REDIS_URL=redis://aegis-redis:6379
-      - OLLAMA_API_URL=http://aegis-ollama:11434
-      - RL_BRAIN_URL=http://aegis-rl-brain:8000
+      - AI_ENGINE_URL=http://aegis-ai-engine:8000
+      - DATABASE_URL=${DATABASE_URL}
       - DOCKER_SOCKET_PATH=/var/run/docker.sock
       - FRONTEND_URL=http://localhost:3000
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
-      aegis-mongo:
-        condition: service_healthy
       aegis-redis:
         condition: service_healthy
-      aegis-ollama:
-        condition: service_healthy
-      aegis-rl-brain:
+      aegis-ai-engine:
         condition: service_healthy
     networks:
       - aegis-network
 
-  # 6. Next.js Cinematic Frontend
+  # 4. Cinematic Dashboard (Next.js 15)
   aegis-frontend:
     build:
       context: ./frontend
@@ -137,14 +85,26 @@ services:
     networks:
       - aegis-network
 
+  # 5. Intentional Demo Crash Service (OOM Crash Simulator)
+  aegis-demo-crash:
+    image: alpine:latest
+    container_name: aegis-demo-crash
+    restart: unless-stopped
+    # cat /dev/zero generates infinite byte streams causing instant OOM under memory constraints
+    command: sh -c "echo '✨ Simulating memory heavy worker...'; sleep 60; cat /dev/zero"
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+    networks:
+      - aegis-network
+
 volumes:
-  mongo_data:
-    driver: local
   redis_data:
     driver: local
-  ollama_data:
+  ai_model_store:
     driver: local
-  rl_model_data:
+  ai_vector_store:
     driver: local
 
 networks:
