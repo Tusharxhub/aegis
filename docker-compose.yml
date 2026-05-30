@@ -18,7 +18,24 @@ services:
       timeout: 3s
       retries: 5
 
-  # 2. Custom AI Inference Engine (Python Sentence-Transformers & FAISS)
+  # 2. Replay Buffer Database (MongoDB)
+  aegis-mongo:
+    image: mongo:6.0
+    container_name: aegis-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - aegis-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 3. Custom AI Inference Engine (Python Sentence-Transformers & FAISS)
   aegis-ai-engine:
     build:
       context: ./services/ai-engine
@@ -85,22 +102,26 @@ services:
     networks:
       - aegis-network
 
-  # 5. Intentional Demo Crash Service (OOM Crash Simulator)
-  aegis-demo-crash:
-    image: alpine:latest
-    container_name: aegis-demo-crash
+  # 5. Intentional Demo Crash Service (Chaos Engineering)
+  demo-crash-service:
+    build:
+      context: ./services/demo-crash-service
+      dockerfile: Dockerfile
+    container_name: demo-crash-service
     restart: unless-stopped
-    # cat /dev/zero generates infinite byte streams causing instant OOM under memory constraints
-    command: sh -c "echo '✨ Simulating memory heavy worker...'; sleep 60; cat /dev/zero"
+    ports:
+      - "3002:3001"
     deploy:
       resources:
         limits:
-          memory: 32M
+          memory: 256M
     networks:
       - aegis-network
 
 volumes:
   redis_data:
+    driver: local
+  mongo_data:
     driver: local
   ai_model_store:
     driver: local

@@ -179,6 +179,38 @@ cd frontend && npm run dev
 
 ---
 
+## ⚡ Live Chaos Simulation
+
+You can trigger intentional infrastructure failures to observe Aegis's autonomous self-healing in real-time. Use the following commands (or the provided `Makefile`) to hit the endpoints of the `demo-crash-service` container:
+
+1. **Simulate Out of Memory (OOM) Kill (Exit Code 137):**
+   ```bash
+   make trigger-oom
+   # OR
+   curl -X GET http://localhost:3002/crash/oom
+   ```
+   *Effect: Rapidly allocates memory in a loop until the Linux kernel terminates the process.*
+
+2. **Simulate Database Timeout / Deadlock:**
+   ```bash
+   make trigger-timeout
+   # OR
+   curl -X GET http://localhost:3002/crash/timeout
+   ```
+   *Effect: Simulates an unrecoverable database lock and crashes the container safely.*
+
+3. **Simulate Port Binding Conflict on Startup:**
+   ```bash
+   make trigger-port
+   # OR
+   curl -X GET http://localhost:3002/crash/port
+   ```
+   *Effect: Attempts to bind an already-used port, causing an immediate fatal startup error.*
+
+When triggered, the NestJS Orchestrator will intercept the Docker Daemon events, extract the stack traces, pass them to the RL Engine (via the Vector store), and execute the correct remediation sequence.
+
+---
+
 ```md
 ## 👨‍💻 Developed By
 
