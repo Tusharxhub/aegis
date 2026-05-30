@@ -3,10 +3,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** BullMQ queue name for crash remediation jobs. */
-export const REMEDIATION_QUEUE = 'aegis:remediation' as const;
+export const REMEDIATION_QUEUE = 'aegis-remediation' as const;
 
 /** BullMQ queue name for telemetry/metrics jobs. */
-export const TELEMETRY_QUEUE = 'aegis:telemetry' as const;
+export const TELEMETRY_QUEUE = 'aegis-telemetry' as const;
 
 /** Socket.io namespace for the control center. */
 export const WS_NAMESPACE = '/aegis' as const;

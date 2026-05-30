@@ -47,6 +47,7 @@ services:
     environment:
       - PORT=8000
       - HOST=0.0.0.0
+      - MONGO_URI=mongodb://aegis-mongo:27017/aegis
     volumes:
       - ai_model_store:/app/models
       - ai_vector_store:/app/vectorstore/storage

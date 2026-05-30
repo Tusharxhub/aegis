@@ -67,11 +67,16 @@ export class AuditService {
    */
   async logIncidentEmbedding(eventId: string, embedding: number[], incidentType: string) {
     try {
-      return await this.mongoService.EmbeddingModel.create({
-        event: eventId,
-        vector: embedding,
-        incidentType,
-      });
+      return await this.mongoService.EmbeddingModel.findOneAndUpdate(
+        { event: eventId },
+        {
+          $set: {
+            vector: embedding,
+            incidentType,
+          }
+        },
+        { upsert: true, new: true }
+      );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Failed to save incident embedding in MongoDB: ${msg}`);
@@ -93,7 +98,7 @@ export class AuditService {
     try {
       return await this.mongoService.PlanModel.create({
         event: eventId,
-        aiAnalysis,
+        analysis: aiAnalysis,
         confidenceScore,
         suggestedAction,
         riskLevel,
