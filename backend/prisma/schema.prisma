@@ -4,50 +4,125 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ServiceStatus {
+  HEALTHY
+  DEGRADED
+  CRASHED
+  RESTARTING
+  UNKNOWN
+}
+
+enum EventType {
+  DIE
+  OOM
+  KILL
+  HEALTH_CHECK_FAIL
+}
+
+enum RemediationStatus {
+  PENDING
+  APPROVED
+  EXECUTING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+enum ActionType {
+  RESTART
+  SCALE
+  ROLLBACK
+  ALERT_ONLY
+  RESOURCE_LIMIT_ADJUST
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Models
+// ─────────────────────────────────────────────────────────────────────────────
+
 model Service {
-  id          String @id @default(uuid())
+  id          String        @id @default(uuid())
   name        String
-  containerId String @unique
-  status      String
+  imageName   String
+  containerId String        @unique
+  status      ServiceStatus @default(HEALTHY)
+  exitCode    Int?
+  restartCount Int          @default(0)
+  lastSeenAt  DateTime      @default(now())
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   events InfrastructureEvent[]
+
+  @@index([containerId])
+  @@index([status])
+  @@map("services")
 }
 
 model InfrastructureEvent {
-  id        String  @id @default(uuid())
+  id        String    @id @default(uuid())
   serviceId String
-  service   Service @relation(fields: [serviceId], references: [id])
+  service   Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
-  eventType String
-  rawLogs   String   @db.Text
-  timestamp DateTime @default(now())
+  eventType EventType
+  exitCode  Int?
+  rawLogs   String    @db.Text
+  metadata  Json?
+  timestamp DateTime  @default(now())
+  createdAt DateTime  @default(now())
 
   remediation RemediationPlan?
+
+  @@index([serviceId])
+  @@index([eventType])
+  @@index([timestamp])
+  @@map("infrastructure_events")
 }
 
 model RemediationPlan {
   id      String              @id @default(uuid())
   eventId String              @unique
-  event   InfrastructureEvent @relation(fields: [eventId], references: [id])
+  event   InfrastructureEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-  aiAnalysis      String @db.Text
+  aiAnalysis      String           @db.Text
   confidenceScore Float
-  suggestedAction String
-  status          String
+  suggestedAction ActionType
+  actionCommand   String
+  actionParams    Json?
+  status          RemediationStatus @default(PENDING)
+  processingTimeMs Int?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   execution ActionExecution?
+
+  @@index([status])
+  @@index([confidenceScore])
+  @@map("remediation_plans")
 }
 
 model ActionExecution {
   id     String          @id @default(uuid())
   planId String          @unique
-  plan   RemediationPlan @relation(fields: [planId], references: [id])
+  plan   RemediationPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
-  actionTaken   String
-  isSuccessful  Boolean
-  executionLogs String? @db.Text
+  actionTaken    String
+  isSuccessful   Boolean
+  executionLogs  String?  @db.Text
+  durationMs     Int?
+  errorMessage   String?
+  rollbackAction String?
 
   executedAt DateTime @default(now())
+
+  @@index([isSuccessful])
+  @@index([executedAt])
+  @@map("action_executions")
 }

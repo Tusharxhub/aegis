@@ -1,42 +1,22 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Project Aegis — Docker Compose
+# Only the Ollama inference container is orchestrated here.
+# Postgres is handled by Neon DB (serverless) and Redis by Upstash (serverless).
+# ─────────────────────────────────────────────────────────────────────────────
+
 services:
-  postgres:
-    image: postgres:latest
-    container_name: aegis-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-aegis}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aegis_password}
-      POSTGRES_DB: ${POSTGRES_DB:-aegis_db}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql
-    networks:
-      - aegis-network
-
-  redis:
-    image: redis:alpine
-    container_name: aegis-redis
-    restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - aegis-network
-
   ollama:
     image: ollama/ollama:latest
     container_name: aegis-ollama
     restart: unless-stopped
     ports:
-      - "11434:11434"
+      - "${OLLAMA_PORT:-11434}:11434"
     environment:
-      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_HOST: "0.0.0.0:11434"
+      OLLAMA_KEEP_ALIVE: "24h"
+      OLLAMA_NUM_PARALLEL: "4"
     volumes:
       - ollama_data:/root/.ollama
-    gpus: all
     deploy:
       resources:
         reservations:
@@ -45,14 +25,27 @@ services:
               count: all
               capabilities:
                 - gpu
+        limits:
+          memory: 16G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
     networks:
       - aegis-network
 
 volumes:
-  postgres_data:
-  redis_data:
   ollama_data:
+    driver: local
 
 networks:
   aegis-network:
     driver: bridge
+    name: aegis-network
