@@ -1,47 +1,83 @@
+<div align="center">
 
-# Aegis 🛡️
-### Air-Gapped AIOps & Reinforcement Learning Infrastructure
+```
+ █████╗ ███████╗ ██████╗ ██╗███████╗
+██╔══██╗██╔════╝██╔════╝ ██║██╔════╝
+███████║█████╗  ██║  ███╗██║███████╗
+██╔══██║██╔══╝  ██║   ██║██║╚════██║
+██║  ██║███████╗╚██████╔╝██║███████║
+╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝╚══════╝
+```
 
-[![Next.js](https://img.shields.io/badge/Next.js-14-black?style=flat&logo=next.js)](https://nextjs.org/)
-[![NestJS](https://img.shields.io/badge/NestJS-10-ea2845?style=flat&logo=nestjs)](https://nestjs.com/)
-[![Python](https://img.shields.io/badge/Python-3.10-3776AB?style=flat&logo=python)](https://www.python.org/)
-[![Docker](https://img.shields.io/badge/Docker-Engine-2496ed?style=flat&logo=docker)](https://www.docker.com/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Local-47A248?style=flat&logo=mongodb)](https://www.mongodb.com/)
-[![Ollama](https://img.shields.io/badge/Local_AI-Ollama-white?style=flat&logo=ollama)](https://ollama.com/)
+### 🛡️ Air-Gapped AIOps & Reinforcement Learning Infrastructure
 
-Aegis is a closed-loop, autonomous Site Reliability Engineering (SRE) platform. Unlike standard observability tools that rely on static thresholds or external LLM APIs, Aegis operates a **Reinforcement Learning (RL) Brain** directly on your local hardware. 
-
-By actively monitoring Docker microservices, vectorizing crash logs using local GPUs, and computing optimal recovery actions through a continuously trained neural network, Aegis learns how to heal your infrastructure through trial and error.
-
-**100% Air-Gapped.** No external APIs. No cloud databases. Zero data leakage. 
+*Closed-loop • Local-first • Self-healing*
 
 ---
 
-## 🔥 Key Innovations
+[![NestJS](https://img.shields.io/badge/NestJS-11-ea2845?style=for-the-badge&logo=nestjs&logoColor=white)](https://nestjs.com/)
+[![Kafka](https://img.shields.io/badge/Kafka-KRaft-231f20?style=for-the-badge&logo=apachekafka&logoColor=white)](https://kafka.apache.org/)
+[![Python](https://img.shields.io/badge/Python-3.10-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Docker](https://img.shields.io/badge/Docker-Engine-2496ed?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Local-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![Redis](https://img.shields.io/badge/Redis-Queue-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
 
-* **Reinforcement Learning (AIOps):** Powered by Python and Stable Baselines3, the infrastructure learns from its own execution history.
-* **On-Device Vectorization:** Utilizes Ollama with NVIDIA GPU passthrough to embed raw, chaotic error logs into dense mathematical vectors for the neural network.
-* **Closed-Loop Autonomy:** Detects crashes, predicts mitigation actions, executes Docker commands natively, and evaluates the survival reward all within milliseconds.
-* **Cinematic Observability:** A high-performance, dark-mode Next.js dashboard featuring deep glassmorphism and real-time WebSocket telemetry for tracking the RL training loops.
-* **Air-Gapped Security:** A strict API Key handshake secures the Python ML microservice, preventing unauthorized execution.
-
----
-
-## 🧠 The Reinforcement Learning Loop (MDP)
-
-Aegis maps DevOps incident response into a strict Markov Decision Process:
-
-1. **State ($S_t$):** The NestJS orchestrator extracts the last 100 lines of crash logs from a dead container. Ollama converts these logs into a dense vector embedding, combined with metric flags (e.g., OOM kill status, CPU spikes).
-2. **Action ($A_t$):** The Python RL Agent evaluates the state vector and predicts a discrete action: `[0: Do Nothing, 1: Restart, 2: Rollback, 3: Scale Up]`.
-3. **Execution:** NestJS executes the chosen action via the UNIX Docker socket (`/var/run/docker.sock`).
-4. **Reward ($R_t$):** NestJS initiates a 5-minute evaluation window. 
-   * **+10 Reward:** If the container remains healthy.
-   * **-15 Penalty:** If the container crashes again.
-5. **Memory (Replay Buffer):** The entire Episode `(State, Action, Reward, NextState)` is committed to the local MongoDB instance. The Python agent pulls these records daily to update its model weights (`model.learn()`).
+</div>
 
 ---
 
-## 🏗️ Deep Architecture Flow
+## ✦ What is Aegis?
+
+> **Aegis** is a closed-loop, local-first SRE platform built around Docker event capture, Kafka streaming, and AI-assisted remediation.
+
+The orchestration stack runs entirely on-prem — no cloud, no telemetry, no external dependencies. The NestJS orchestrator watches container events, publishes typed Kafka messages, stores audit and incident data in MongoDB, and relays normalized updates to connected clients through Socket.io. A Python AI engine and RL agent handle model training and crash-simulation workflows offline.
+
+---
+
+## ⚡ Core Capabilities
+
+| Capability | Description |
+|---|---|
+| 🐳 **Container Watching** | Tracks Docker container lifecycle and crash events in real time |
+| 📡 **Kafka Event Bus** | Publishes typed events across incident, log, diagnosis, remediation, and audit topics |
+| 🩺 **Health Monitoring** | Tracks Kafka producer and consumer health for operator visibility |
+| 🗄️ **Durable Storage** | MongoDB persists plans, services, episodes, and replay history |
+| ⚙️ **Async Queuing** | Redis and BullMQ handle background work and async processing |
+| 🔌 **Live Gateway** | Socket.io broadcasts normalized system events to connected clients |
+| 🤖 **AI Engine** | Python-based offline training, diagnosis, and RL policy workflows |
+| 💥 **Chaos Testing** | Built-in demo crash service for local simulation |
+
+---
+
+## 🏛️ Architecture
+
+```mermaid
+graph TD
+    Docker[Docker Daemon Events]
+    Backend[NestJS Orchestrator]
+    Kafka[(Kafka KRaft Cluster)]
+    Mongo[(MongoDB)]
+    Redis[(Redis / BullMQ)]
+    AI[Python AI Engine]
+    RL[Python RL Agent]
+    Crash[demo-crash-service]
+    UI[Optional dashboard client]
+
+    Crash --> Docker
+    Docker --> Backend
+    Backend --> Kafka
+    Backend --> Mongo
+    Backend --> Redis
+    Kafka --> Backend
+    Backend --> AI
+    AI --> RL
+    Backend --> UI
+    Kafka --> UI
+```
+
+---
+
+## 🔬 Deep Architecture Flow
 
 ```mermaid
 graph TD
@@ -82,176 +118,177 @@ graph TD
     Redis -- "Pulls Async" --> RL_Coord
     RL_Coord -- "Requests Vector" --> Ollama
     Ollama -- "Returns Vector [0.12, -0.4...]" --> RL_Coord
-    
     RL_Coord -- "State Vector + API Key" --> Agent
     Agent -- "Predicts Action [1: Restart]" --> RL_Coord
     RL_Coord -- "Executes mitigation" --> Executor
     Executor -- "Issues command" --> DockerSocket
-    
     Executor -- "Evaluates 5-Min Survival Reward" --> Mongo
     Mongo -- "Daily Batch Training" --> Agent
-
 ```
 
 ---
 
-## ⚙️ Technology Stack
+## 🧱 Tech Stack
 
-**The Neural Engine (Python)**
+<table>
+<tr>
+<td valign="top" width="50%">
 
-* Python 3.10 & FastAPI
-* Stable Baselines3 (PPO/DQN) & PyTorch
-* Uvicorn (Secured via `X-Aegis-Auth-Token`)
+### 🟥 Backend Orchestrator
+- **NestJS 11** + TypeScript
+- **KafkaJS** — typed event publishing & consuming
+- **Socket.io** — realtime event relay gateway
+- **Dockerode** — Docker event handling
+- **BullMQ + Redis** — async queueing
+- **Mongoose + MongoDB** — durable persistence
 
-**The Orchestrator (NestJS)**
+</td>
+<td valign="top" width="50%">
 
-* NestJS & TypeScript
-* Dockerode (Direct daemon manipulation)
-* BullMQ & Redis (Asynchronous queueing)
-* Mongoose (MongoDB ODM)
-* Socket.io Gateway
+### 🟧 Streaming Layer
+- **Kafka** in KRaft mode *(no ZooKeeper)*
+- **Kafka UI** — local topic inspection
+- Topics: `container` · `incident` · `logs` · `diagnosis` · `remediation` · `metrics` · `audit`
 
-**Data & Edge Compute**
+</td>
+</tr>
+<tr>
+<td valign="top" width="50%">
 
-* MongoDB (Episode & Replay Buffer Storage)
-* Redis (Event Streaming)
-* Ollama (Local AI Runtime for Embeddings)
+### 🟦 Python Services
+- `services/ai-engine` — model training & inference
+- `rl-agent` — reinforcement-learning control loop
+- `demo-crash-service` — chaos simulation
 
-**The Control Center (Next.js)**
+</td>
+<td valign="top" width="50%">
 
-* Next.js 14 (App Router) & TypeScript
-* Tailwind CSS & Framer Motion (Glassmorphic UI)
-* Recharts (Reward & Training visualizers)
+### 🟩 Infrastructure
+- **Docker Compose** — single-command full-stack
+- **KRaft Kafka** — no external ZooKeeper dependency
+- Fully **air-gapped** by design
+
+</td>
+</tr>
+</table>
 
 ---
 
-## 📦 Installation & Deployment
+## 🚀 Local Setup
 
-### Hardware & Software Prerequisites
-
-* **CPU:** Ryzen 7 / Intel i7+
-* **RAM:** 16GB Minimum
-* **GPU:** NVIDIA RTX Series (with NVIDIA Container Toolkit installed)
-* **OS:** Linux (Ubuntu/Fedora) natively or WSL2
-* **Tools:** Docker Engine, Docker Compose
-
-### Step 1: Ignite the Infrastructure
-
-Clone the repository and boot the completely localized Docker network.
-
-```bash
-git clone [https://github.com/Tusharxhub/aegis.git](https://github.com/Tusharxhub/aegis.git)
-cd aegis
-docker-compose up -d
+### Prerequisites
 
 ```
-
-*This spins up MongoDB, Redis, the Python RL Agent, and the Ollama GPU container.*
-
-### Step 2: Configure Internal Security
-
-Create a `.env` file in the root directory to share the API Key across containers:
-
-```env
-AEGIS_INTERNAL_KEY="generate_a_secure_random_string_here"
-MONGO_URI="mongodb://aegis-mongo:27017/aegis"
-REDIS_URL="redis://aegis-redis:6379"
-KAFKA_BROKER="aegis-kafka:9092"
-KAFKA_CLIENT_ID="aegis-orchestrator"
-KAFKA_GROUP_ID="aegis-backend-group"
-KAFKA_SSL="false"
-
+Docker Engine & Docker Compose
+Node.js  ≥ 20
+Python   ≥ 3.10
 ```
 
-### Step 3: Pull the Embedding Model
+### Start the Full Stack
 
 ```bash
-docker exec -it aegis-ollama ollama pull nomic-embed-text
-
+docker compose up --build -d
 ```
 
-### Step 4: Boot the Control & Orchestration Planes
+> Spins up: MongoDB · Redis · Kafka · Kafka UI · NestJS backend · AI engine · Demo crash service
+
+### Development Mode
 
 ```bash
-# Terminal 1: Boot NestJS Orchestrator
 cd backend && npm run start:dev
+```
 
-# Terminal 2: Boot Next.js Control Center
-cd frontend && npm run dev
+> Runs the NestJS orchestrator locally while keeping all supporting services in Docker.
 
+---
+
+## 🌐 Access Points
+
+| Service | URL / Address |
+|---|---|
+| 🖥️ Backend API + Socket.io | `http://localhost:3001` |
+| 📊 Kafka UI | `http://localhost:8080` |
+| 🗄️ MongoDB | `localhost:27017` |
+| ⚡ Redis | `localhost:6379` |
+| 📨 Kafka Broker | `localhost:9092` |
+| 🤖 AI Engine | `http://localhost:8000` |
+| 💥 Demo Crash Service | `http://localhost:3002` |
+
+---
+
+## 🔄 Kafka Event Flow
+
+```
+① Docker emits a container event
+        ↓
+② NestJS normalizes & publishes to Kafka
+        ↓
+③ Kafka consumers validate & classify the stream
+        ↓
+④ Dashboard relay broadcasts via Socket.io
+        ↓
+⑤ MongoDB persists history & audit trail
 ```
 
 ---
 
-## 🤖 AI Model Training Pipeline
+## 🔭 Under Development
 
-Project Aegis features a localized, custom AI engine capable of log text classification and offline reinforcement learning. To train these neural network models inside the air-gapped container, follow these steps:
-
-### Step 1: Generate Synthetic DevOps Log Data
-Build the synthetic log dataset at `/app/training/synthetic_logs.csv` inside the container:
-```bash
-docker exec -it aegis-ai-engine python training/generate_synthetic_data.py
-```
-*Effect: Generates 900 custom log samples across 6 distinct incident classes (OOM_KILL, DB_TIMEOUT, PORT_COLLISION, CRASH_LOOP, MEMORY_LEAK, PERMISSION_DENIED).*
-
-### Step 2: Train the Log Classifier Head
-Vectorize log text and train the custom classification head:
-```bash
-docker exec -it aegis-ai-engine python training/train_classifier.py
-```
-*Effect: Encodes the logs using SentenceTransformer, trains the MLP head to 100% accuracy, and serializes the trained models to `/app/models/sentence_transformer` and `/app/models/classifier_head.joblib`.*
-
-### Step 3: Train the Offline Reinforcement Learning Agent
-Train the offline healing policy agent on MongoDB episodes:
-```bash
-docker exec -it aegis-ai-engine python training/train_rl.py
-```
-*Effect: Connects to MongoDB, seeds the episodes database if empty, executes the Gymnasium training loop for 10,000 steps, and persists the trained agent weights as `ppo_aegis_agent.zip`.*
+- [ ] 🖥️ Browser dashboard for live Kafka event visualization
+- [ ] 🛠️ Operator-focused remediation controls & incident review views
+- [ ] 🧠 Expanded RL training & policy evaluation workflows
+- [ ] 🔗 Additional service integrations for broader observability coverage
 
 ---
 
-## 💥 Live Chaos Simulation
+## 📌 Design Principles
 
-To test Aegis's autonomous self-healing loops, you can trigger specific microservice failures inside the running cluster. The `demo-crash-service` container exposes three endpoints on host port `3002` simulating realistic DevOps crashes:
+> **Local by default.** Kafka, Redis, MongoDB, and the backend all run on your own machine.
+> No telemetry. No cloud dependency. No surprises.
 
-1. **Simulate Out-Of-Memory (OOM) Kill**
-   ```bash
-   curl http://localhost:3002/crash/oom
-   ```
-   *Effect: Rapidly allocates memory arrays in a loop until Node.js crashes with a heap limit allocation failure. Aegis classifies the crash, verifies the `LOW` risk profile, and automatically restarts the container.*
-
-2. **Simulate Database Timeout / Connection Lock**
-   ```bash
-   curl http://localhost:3002/crash/timeout
-   ```
-   *Effect: Simulates an unrecoverable database connection lock and exits with a DB_TIMEOUT trace. Aegis catches the failure, validates it, and issues a restart.*
-
-3. **Simulate Port Binding Conflict on Startup**
-   ```bash
-   curl http://localhost:3002/crash/port
-   ```
-   *Effect: Attempts to bind an already-used port, causing an immediate fatal EADDRINUSE startup error. Because port conflicts cannot be healed by simple restarts, Aegis flags this as a `HIGH` risk plan, stops the container, and marks the service status as `DEGRADED` for manual operator oversight.*
-
-When triggered, the NestJS Orchestrator will intercept the Docker Daemon events, extract the stack traces, pass them to the AI Engine for vectorization, and execute the correct remediation sequence.
+- 🔒 Air-gapped — zero external network requirements at runtime
+- 🔁 Closed-loop — detect → diagnose → remediate → learn, all locally
+- 📜 Auditable — every action persisted in MongoDB for replay and review
+- 🧩 Modular — each service is independently replaceable
 
 ---
 
-```
 ## 👨‍💻 Developed By
 
-### **Tushar Kanti Dey**  
-*Full Stack Developer • DevOps Engineer • AI Infrastructure Enthusiast*
+<div align="center">
 
-Aegis was developed as a capstone project for the Bachelor of Technology (B.Tech) program in Computer Science & Engineering at Adamas University.
-
-The project was engineered to explore the convergence of autonomous infrastructure orchestration, real-time observability, and localized artificial intelligence systems. Its primary objective is to demonstrate how modern DevOps environments can evolve from passive monitoring systems into intelligent self-healing platforms capable of deterministic recovery and autonomous operational decision-making.
+### Tushar Kanti Dey
+*Full Stack Developer · DevOps Engineer · AI Infrastructure Enthusiast*
 
 ---
 
-### Connect
+*Aegis was developed as a capstone project for the*
+*Bachelor of Technology (B.Tech) in Computer Science & Engineering*
+*at **Adamas University***
 
-- 📧 Email: t.k.d.dey2033929837@gmail.com
-- 🔗 GitHub: https://github.com/Tusharxhub
-- 🌐 Portfolio: https://www.tushardevx01.tech
-- 📸 Instagram: https://www.instagram.com/tushardevx01/
-```
+---
+
+*Engineered to explore the convergence of autonomous infrastructure orchestration,*
+*real-time observability, and localized AI systems — demonstrating how modern*
+*DevOps environments can evolve from passive monitoring into intelligent,*
+*self-healing platforms capable of deterministic recovery and autonomous*
+*operational decision-making.*
+
+---
+
+[![Email](https://img.shields.io/badge/Email-t.k.d.dey2033929837%40gmail.com-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:t.k.d.dey2033929837@gmail.com)
+[![GitHub](https://img.shields.io/badge/GitHub-Tusharxhub-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Tusharxhub)
+[![Portfolio](https://img.shields.io/badge/Portfolio-tushardevx01.tech-0A0A0A?style=for-the-badge&logo=vercel&logoColor=white)](https://www.tushardevx01.tech)
+[![Instagram](https://img.shields.io/badge/Instagram-tushardevx01-E4405F?style=for-the-badge&logo=instagram&logoColor=white)](https://www.instagram.com/tushardevx01/)
+
+</div>
+
+---
+
+<div align="center">
+
+*Built with precision. Deployed locally. Evolving autonomously.*
+
+**⭐ Star this repo if Aegis inspires your infrastructure thinking**
+
+</div>
