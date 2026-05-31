@@ -4,7 +4,7 @@ import Docker from 'dockerode';
 import { MongoService } from '../mongo/mongo.service.js';
 import { EmbeddingService } from '../ai-agent/embedding.service.js';
 import { AegisGateway } from '../gateway/events.gateway.js';
-import { WsEventName } from '../common/interfaces/websocket-event.interface.js';
+import { OperationalEventName } from '../common/interfaces/operational-event.interface.js';
 import type { DockerCrashEvent } from '../common/interfaces/docker-event.interface.js';
 import { randomUUID } from 'crypto';
 
@@ -64,10 +64,10 @@ export class RlCoordinatorService implements OnModuleInit {
     );
 
     try {
-      // 1. Get Log Embeddings from local Ollama
+      // 1. Get deterministic local log embeddings
       this.emitTerminalLog(
         'ai',
-        'Ollama',
+        'EmbeddingService',
         `📊 Generating embeddings for container logs...`,
       );
       const embedding = await this.embeddingService.getEmbedding(event.logs);
@@ -80,7 +80,7 @@ export class RlCoordinatorService implements OnModuleInit {
       const normalizedExitCode = event.exitCode ? event.exitCode / 255.0 : 0.0;
       const stateVector = [...embedding, isOom, normalizedExitCode];
 
-      this.gateway.broadcast(WsEventName.AI_ANALYSIS_START, {
+      this.gateway.broadcast(OperationalEventName.AI_ANALYSIS_START, {
         eventId,
         containerName: event.containerName,
         stateVector,
@@ -115,7 +115,7 @@ export class RlCoordinatorService implements OnModuleInit {
         processingTimeMs: Date.now() - startTime,
       });
 
-      this.gateway.broadcast(WsEventName.AI_ANALYSIS_COMPLETE, {
+      this.gateway.broadcast(OperationalEventName.AI_ANALYSIS_COMPLETE, {
         eventId,
         planId,
         result: {
@@ -131,7 +131,7 @@ export class RlCoordinatorService implements OnModuleInit {
 
       // 5. Execute corresponding Docker action
       const executionId = randomUUID();
-      this.gateway.broadcast(WsEventName.REMEDIATION_EXECUTING, {
+      this.gateway.broadcast(OperationalEventName.REMEDIATION_EXECUTING, {
         eventId,
         planId,
         executionId,
@@ -178,7 +178,7 @@ export class RlCoordinatorService implements OnModuleInit {
         { status: isSuccessful ? 'COMPLETED' : 'FAILED' },
       );
 
-      this.gateway.broadcast(WsEventName.REMEDIATION_COMPLETE, {
+      this.gateway.broadcast(OperationalEventName.REMEDIATION_COMPLETE, {
         eventId,
         planId,
         executionId,
@@ -418,8 +418,8 @@ export class RlCoordinatorService implements OnModuleInit {
         { status: isHealthy ? 'HEALTHY' : 'CRASHED', lastSeenAt: new Date() },
       );
 
-      // Broadcast update to client dashboard
-      this.gateway.broadcast(WsEventName.REMEDIATION_COMPLETE, {
+      // Record update in the operational event sink
+      this.gateway.broadcast(OperationalEventName.REMEDIATION_COMPLETE, {
         eventId: params.eventId,
         planId: null,
         executionId: null,
@@ -495,7 +495,7 @@ export class RlCoordinatorService implements OnModuleInit {
     source: string,
     message: string,
   ): void {
-    this.gateway.broadcast(WsEventName.TERMINAL_LOG, {
+    this.gateway.broadcast(OperationalEventName.TERMINAL_LOG, {
       id: randomUUID(),
       level,
       source,

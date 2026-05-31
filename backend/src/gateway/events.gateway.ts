@@ -1,154 +1,45 @@
-import { Logger } from '@nestjs/common';
-import {
-  WebSocketGateway,
-  WebSocketServer,
-  OnGatewayInit,
-  OnGatewayConnection,
-  OnGatewayDisconnect,
-  SubscribeMessage,
-  MessageBody,
-  ConnectedSocket,
-} from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-import {
-  WS_NAMESPACE,
-  HEARTBEAT_INTERVAL_MS,
-} from '../common/constants/index.js';
-import type { WsEventName } from '../common/interfaces/websocket-event.interface.js';
+import { Injectable, Logger } from '@nestjs/common';
+import type { OperationalEventName } from '../common/interfaces/operational-event.interface.js';
 
 /**
- * AegisGateway — Socket.io WebSocket Gateway.
+ * AegisGateway — headless event sink for infrastructure event fan-out.
  *
- * Broadcasts live infrastructure events, AI analysis streams,
- * remediation execution logs, and terminal output to the frontend
- * Control Center.
- *
- * Namespace: /aegis
- * CORS: Configured for Next.js dev server and production origins.
+ * The platform is backend-only, so this service records structured runtime
+ * events and preserves the previous API surface without any browser transport.
  */
-@WebSocketGateway({
-  namespace: WS_NAMESPACE,
-  cors: {
-    origin: [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      process.env.FRONTEND_URL ?? 'http://localhost:3000',
-    ],
-    methods: ['GET', 'POST'],
-    credentials: true,
-  },
-  transports: ['websocket', 'polling'],
-})
-export class AegisGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
-{
-  @WebSocketServer()
-  private server!: Server;
-
+@Injectable()
+export class AegisGateway {
   private readonly logger = new Logger(AegisGateway.name);
-  private connectedClients = 0;
-  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private readonly startTime = Date.now();
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Lifecycle
-  // ─────────────────────────────────────────────────────────────────────────
-
-  afterInit(): void {
-    this.logger.log(
-      `🔌 WebSocket Gateway initialized on namespace "${WS_NAMESPACE}"`,
-    );
-
-    // Start heartbeat broadcast
-    this.heartbeatInterval = setInterval(() => {
-      this.server.emit('system:heartbeat', {
-        uptime: Math.floor((Date.now() - this.startTime) / 1000),
-        connectedClients: this.connectedClients,
-        timestamp: new Date().toISOString(),
-      });
-    }, HEARTBEAT_INTERVAL_MS);
-  }
-
-  handleConnection(client: Socket): void {
-    this.connectedClients++;
-    this.logger.log(
-      `📡 Client connected: ${client.id} (total: ${this.connectedClients})`,
-    );
-
-    // Send initial connection acknowledgment
-    client.emit('connection:ack', {
-      clientId: client.id,
-      serverTime: new Date().toISOString(),
-      uptime: Math.floor((Date.now() - this.startTime) / 1000),
-    });
-  }
-
-  handleDisconnect(client: Socket): void {
-    this.connectedClients--;
-    this.logger.log(
-      `📡 Client disconnected: ${client.id} (total: ${this.connectedClients})`,
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Broadcasting
-  // ─────────────────────────────────────────────────────────────────────────
-
   /**
-   * Broadcast an event to all connected clients.
+   * Record an event that used to be broadcast to a browser client.
    */
-  broadcast(event: WsEventName | string, payload: unknown): void {
-    if (this.server) {
-      this.server.emit(event, payload);
-    }
+  broadcast(event: OperationalEventName | string, payload: unknown): void {
+    this.logger.debug(
+      `event=${event} uptime=${Math.floor((Date.now() - this.startTime) / 1000)} payload=${this.safeSerialize(payload)}`,
+    );
   }
 
   /**
-   * Send an event to a specific client.
+   * Preserve the old API surface without any client transport.
    */
-  sendToClient(clientId: string, event: string, payload: unknown): void {
-    if (this.server) {
-      this.server.to(clientId).emit(event, payload);
-    }
+  sendToClient(_clientId: string, event: string, payload: unknown): void {
+    this.broadcast(event, payload);
   }
 
   /**
-   * Get the current number of connected clients.
+   * There are no connected browser clients in headless mode.
    */
   getConnectedClientsCount(): number {
-    return this.connectedClients;
+    return 0;
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Client Messages
-  // ─────────────────────────────────────────────────────────────────────────
-
-  /**
-   * Handle ping from client (connection health check).
-   */
-  @SubscribeMessage('client:ping')
-  handlePing(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { timestamp: string },
-  ): { event: string; data: { serverTime: string; clientTime: string } } {
-    return {
-      event: 'client:pong',
-      data: {
-        serverTime: new Date().toISOString(),
-        clientTime: data.timestamp,
-      },
-    };
-  }
-
-  /**
-   * Handle request for current system state snapshot.
-   */
-  @SubscribeMessage('client:request-state')
-  handleStateRequest(@ConnectedSocket() client: Socket): void {
-    client.emit('system:state-snapshot', {
-      uptime: Math.floor((Date.now() - this.startTime) / 1000),
-      connectedClients: this.connectedClients,
-      timestamp: new Date().toISOString(),
-    });
+  private safeSerialize(payload: unknown): string {
+    try {
+      return JSON.stringify(payload);
+    } catch {
+      return '[unserializable-payload]';
+    }
   }
 }

@@ -12,7 +12,7 @@ import {
   type EachMessagePayload,
 } from 'kafkajs';
 import { AegisGateway } from '../gateway/events.gateway.js';
-import { WsEventName } from '../common/interfaces/websocket-event.interface.js';
+import { OperationalEventName } from '../common/interfaces/operational-event.interface.js';
 import {
   KAFKA_CONSUMER_GROUPS,
   KAFKA_CONSUMER_SUBSCRIPTIONS,
@@ -225,9 +225,9 @@ export class KafkaConsumerService
     };
 
     if (groupId === KAFKA_CONSUMER_GROUPS.DASHBOARD) {
-      this.gateway.broadcast(WsEventName.KAFKA_EVENT, streamEvent);
+      this.gateway.broadcast(OperationalEventName.KAFKA_EVENT, streamEvent);
       this.gateway.broadcast(
-        WsEventName.KAFKA_HEALTH,
+        OperationalEventName.KAFKA_HEALTH,
         this.health.getSnapshot(),
       );
     }

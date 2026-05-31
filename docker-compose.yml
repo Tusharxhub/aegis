@@ -123,7 +123,6 @@ services:
       - AI_ENGINE_URL=http://aegis-ai-engine:8000
       - MONGO_URI=mongodb://aegis-mongo:27017/aegis
       - DOCKER_SOCKET_PATH=/var/run/docker.sock
-      - FRONTEND_URL=http://localhost:3000
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
@@ -135,24 +134,6 @@ services:
         condition: service_healthy
       aegis-mongo:
         condition: service_started
-    networks:
-      - aegis-network
-
-
-  # 5. Cinematic Dashboard (Next.js 15)
-  aegis-frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: aegis-frontend
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_SOCKET_URL=http://localhost:3001
-      - NEXT_PUBLIC_API_URL=http://localhost:3001
-    depends_on:
-      - aegis-nestjs
     networks:
       - aegis-network
 

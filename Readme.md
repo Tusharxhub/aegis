@@ -30,7 +30,7 @@
 
 > **Aegis** is a closed-loop, local-first SRE platform built around Docker event capture, Kafka streaming, and AI-assisted remediation.
 
-The orchestration stack runs entirely on-prem — no cloud, no telemetry, no external dependencies. The NestJS orchestrator watches container events, publishes typed Kafka messages, stores audit and incident data in MongoDB, and relays normalized updates to connected clients through Socket.io. A Python AI engine and RL agent handle model training and crash-simulation workflows offline.
+The orchestration stack runs entirely on-prem — no cloud, no telemetry, no external dependencies. The NestJS control plane watches container events, publishes typed Kafka messages, stores audit and incident data in MongoDB, and coordinates deterministic remediation workflows locally. A Python AI engine and RL agent handle model training and crash-simulation workflows offline.
 
 ---
 
@@ -43,7 +43,7 @@ The orchestration stack runs entirely on-prem — no cloud, no telemetry, no ext
 | 🩺 **Health Monitoring** | Tracks Kafka producer and consumer health for operator visibility |
 | 🗄️ **Durable Storage** | MongoDB persists plans, services, episodes, and replay history |
 | ⚙️ **Async Queuing** | Redis and BullMQ handle background work and async processing |
-| 🔌 **Live Gateway** | Socket.io broadcasts normalized system events to connected clients |
+| 🔌 **Headless Relay** | Structured backend events stay within the control plane and Kafka pipeline |
 | 🤖 **AI Engine** | Python-based offline training, diagnosis, and RL policy workflows |
 | 💥 **Chaos Testing** | Built-in demo crash service for local simulation |
 
@@ -61,7 +61,6 @@ graph TD
     AI[Python AI Engine]
     RL[Python RL Agent]
     Crash[demo-crash-service]
-    UI[Optional dashboard client]
 
     Crash --> Docker
     Docker --> Backend
@@ -71,8 +70,6 @@ graph TD
     Kafka --> Backend
     Backend --> AI
     AI --> RL
-    Backend --> UI
-    Kafka --> UI
 ```
 
 ---
@@ -95,8 +92,7 @@ graph TD
     end
 
     %% AI Compute
-    subgraph Data Processing [GPU Inference]
-        Ollama[Ollama Container]
+    subgraph Data Processing [Local Inference]
         Embeddings[Text-to-Vector Embeddings]
     end
 
@@ -116,9 +112,7 @@ graph TD
     DockerSocket -- "Intercepts Event" --> Watcher
     Watcher -- "Queues Logs" --> Redis
     Redis -- "Pulls Async" --> RL_Coord
-    RL_Coord -- "Requests Vector" --> Ollama
-    Ollama -- "Returns Vector [0.12, -0.4...]" --> RL_Coord
-    RL_Coord -- "State Vector + API Key" --> Agent
+    RL_Coord -- "Builds State Vector" --> Agent
     Agent -- "Predicts Action [1: Restart]" --> RL_Coord
     RL_Coord -- "Executes mitigation" --> Executor
     Executor -- "Issues command" --> DockerSocket
@@ -137,7 +131,6 @@ graph TD
 ### 🟥 Backend Orchestrator
 - **NestJS 11** + TypeScript
 - **KafkaJS** — typed event publishing & consuming
-- **Socket.io** — realtime event relay gateway
 - **Dockerode** — Docker event handling
 - **BullMQ + Redis** — async queueing
 - **Mongoose + MongoDB** — durable persistence
@@ -156,8 +149,8 @@ graph TD
 <td valign="top" width="50%">
 
 ### 🟦 Python Services
-- `services/ai-engine` — model training & inference
-- `rl-agent` — reinforcement-learning control loop
+- `services/ai-engine` — offline inference and model training
+- `rl-agent` — offline reinforcement-learning lab
 - `demo-crash-service` — chaos simulation
 
 </td>
@@ -206,7 +199,7 @@ cd backend && npm run start:dev
 
 | Service | URL / Address |
 |---|---|
-| 🖥️ Backend API + Socket.io | `http://localhost:3001` |
+| 🖥️ Backend API | `http://localhost:3001` |
 | 📊 Kafka UI | `http://localhost:8080` |
 | 🗄️ MongoDB | `localhost:27017` |
 | ⚡ Redis | `localhost:6379` |
@@ -222,10 +215,7 @@ cd backend && npm run start:dev
 ① Docker emits a container event
         ↓
 ② NestJS normalizes & publishes to Kafka
-        ↓
 ③ Kafka consumers validate & classify the stream
-        ↓
-④ Dashboard relay broadcasts via Socket.io
         ↓
 ⑤ MongoDB persists history & audit trail
 ```
@@ -234,7 +224,6 @@ cd backend && npm run start:dev
 
 ## 🔭 Under Development
 
-- [ ] 🖥️ Browser dashboard for live Kafka event visualization
 - [ ] 🛠️ Operator-focused remediation controls & incident review views
 - [ ] 🧠 Expanded RL training & policy evaluation workflows
 - [ ] 🔗 Additional service integrations for broader observability coverage

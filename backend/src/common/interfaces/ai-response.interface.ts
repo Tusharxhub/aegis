@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // AI Agent Data Contracts
-// Strict schemas enforced on the Ollama/Qwen response.
+// Strict schemas enforced on the local AI diagnosis response.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -46,9 +46,9 @@ export interface AiAnalysisResult {
 }
 
 /**
- * Ollama API response envelope.
+ * Local AI API response envelope.
  */
-export interface OllamaApiResponse {
+export interface LocalAiApiResponse {
   readonly model: string;
   readonly created_at: string;
   readonly response: string;

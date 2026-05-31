@@ -1,57 +1,42 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'crypto';
 
 @Injectable()
 export class EmbeddingService {
   private readonly logger = new Logger(EmbeddingService.name);
-  private readonly ollamaUrl: string;
-  private readonly model: string;
+  private readonly dimension: number;
 
   constructor(private readonly configService: ConfigService) {
-    this.ollamaUrl =
-      this.configService.get<string>('OLLAMA_API_URL') ??
-      'http://aegis-ollama:11434';
-    this.model =
-      this.configService.get<string>('OLLAMA_EMBEDDING_MODEL') ?? 'all-minilm';
+    this.dimension = parseInt(
+      this.configService.get<string>('EMBEDDING_DIMENSION') ?? '384',
+      10,
+    );
   }
 
   /**
-   * Request embedding vector for log strings from local Ollama.
-   * If the service is loading/offline, falls back to a 384-dimension zero vector.
+   * Build a deterministic local embedding vector for log strings.
+   * The vector is stable across runs and does not require external services.
    */
   async getEmbedding(text: string): Promise<number[]> {
-    const url = `${this.ollamaUrl}/api/embeddings`;
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: this.model,
-          prompt: text,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(
-          `Ollama Embedding API returned HTTP ${response.status}: ${errorBody}`,
-        );
-      }
-
-      const data = (await response.json()) as { embedding: number[] };
-      return data.embedding;
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(
-        `❌ Failed to fetch embedding from local Ollama: ${message}`,
-      );
-
-      // Standalone fallback to prevent whole loop crashes
-      this.logger.warn(
-        '⚠️ Returning fallback 384-dimension zero-vector to keep the MDP loop active.',
-      );
-      return new Array(384).fill(0);
+    const normalized = text.trim().toLowerCase();
+    if (!normalized) {
+      return new Array(this.dimension).fill(0);
     }
+
+    const vector = new Array<number>(this.dimension).fill(0);
+    const tokens = normalized.match(/[a-z0-9_:-]+/g) ?? [normalized];
+
+    for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex += 1) {
+      const token = `${tokens[tokenIndex]}:${tokenIndex}`;
+      const digest = createHash('sha256').update(token).digest();
+      const slot = digest.readUInt32BE(0) % this.dimension;
+      const polarity = digest[4] / 255;
+      const strength = 0.5 + digest[5] / 255;
+      vector[slot] += (polarity > 0.5 ? 1 : -1) * strength;
+    }
+
+    const scale = Math.max(tokens.length, 1);
+    return vector.map((value) => value / scale);
   }
 }

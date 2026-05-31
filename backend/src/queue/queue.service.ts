@@ -18,7 +18,7 @@ import {
  * Manages BullMQ producer and worker backed by Upstash (serverless Redis).
  * - Producer: Enqueues crash events off the main thread.
  * - Worker: Processes jobs and emits internal events for the Orchestrator.
- * - QueueEvents: Monitors job lifecycle for WebSocket broadcasting.
+ * - QueueEvents: Monitors job lifecycle for operational telemetry.
  */
 @Injectable()
 export class QueueService implements OnModuleInit {

@@ -16,7 +16,7 @@ import type {
   JobProcessingResult,
 } from '../common/interfaces/queue-payload.interface.js';
 import { JobPriority } from '../common/interfaces/queue-payload.interface.js';
-import { WsEventName } from '../common/interfaces/websocket-event.interface.js';
+import { OperationalEventName } from '../common/interfaces/operational-event.interface.js';
 import { MAX_JOB_ATTEMPTS } from '../common/constants/index.js';
 import {
   ServiceStatus,
@@ -181,7 +181,7 @@ export class OrchestratorService implements OnModuleInit {
         },
       });
 
-      // 2. Broadcast incident.detected via WebSocket
+      // 2. Record incident.detected in the headless event sink
       this.gateway.broadcast('incident.detected', {
         id: infraEvent.id,
         containerId: event.containerId,
@@ -324,7 +324,7 @@ export class OrchestratorService implements OnModuleInit {
         },
       });
 
-      // 5. Broadcast ai.analysis.completed to frontend
+      // 5. Record ai.analysis.completed in the headless event sink
       this.gateway.broadcast('ai.analysis.completed', {
         eventId: dbEvent.id,
         planId: plan.id,
@@ -521,7 +521,7 @@ export class OrchestratorService implements OnModuleInit {
         },
       });
 
-      // 7. Emit remediation.completed to frontend
+      // 7. Record remediation.completed in the headless event sink
       this.gateway.broadcast('remediation.completed', {
         eventId: dbEvent.id,
         planId: plan.id,
@@ -576,7 +576,7 @@ export class OrchestratorService implements OnModuleInit {
     source: string,
     message: string,
   ): void {
-    this.gateway.broadcast(WsEventName.TERMINAL_LOG, {
+    this.gateway.broadcast(OperationalEventName.TERMINAL_LOG, {
       id: randomUUID(),
       level,
       source,
