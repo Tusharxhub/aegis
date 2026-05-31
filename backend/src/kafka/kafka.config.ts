@@ -41,12 +41,42 @@ export class KafkaConfigService {
     );
   }
 
+  getConnectionRetryLimit(): number {
+    return this.parsePositiveInteger('KAFKA_CONNECTION_RETRIES', 5);
+  }
+
   getConsumerRetryLimit(): number {
     return this.parsePositiveInteger('KAFKA_CONSUMER_RETRIES', 5);
   }
 
   getProducerRetryLimit(): number {
-    return this.parsePositiveInteger('KAFKA_PRODUCER_RETRIES', 8);
+    const configured = this.configService.get<string>('KAFKA_PRODUCER_RETRIES');
+    if (!configured?.trim()) {
+      return Number.MAX_SAFE_INTEGER;
+    }
+
+    const parsed = Number.parseInt(configured, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      throw new Error('KAFKA_PRODUCER_RETRIES must be a positive integer.');
+    }
+
+    return parsed;
+  }
+
+  getProducerMaxInFlightRequests(): number {
+    return this.parsePositiveInteger('KAFKA_PRODUCER_MAX_IN_FLIGHT_REQUESTS', 1);
+  }
+
+  getInitialRetryTimeMs(): number {
+    return this.parsePositiveInteger('KAFKA_INITIAL_RETRY_TIME_MS', 300);
+  }
+
+  getConnectionTimeoutMs(): number {
+    return this.parsePositiveInteger('KAFKA_CONNECTION_TIMEOUT_MS', 10_000);
+  }
+
+  getRequestTimeoutMs(): number {
+    return this.parsePositiveInteger('KAFKA_REQUEST_TIMEOUT_MS', 30_000);
   }
 
   isSslEnabled(): boolean {
@@ -62,12 +92,26 @@ export class KafkaConfigService {
     readonly clientId: string;
     readonly sslEnabled: boolean;
     readonly environment: string;
+    readonly connectionRetryLimit: number;
+    readonly consumerRetryLimit: number;
+    readonly producerRetryLimit: number;
+    readonly producerMaxInFlightRequests: number;
+    readonly initialRetryTimeMs: number;
+    readonly connectionTimeoutMs: number;
+    readonly requestTimeoutMs: number;
   } {
     return {
       brokers: this.getBrokers(),
       clientId: this.getClientId(),
       sslEnabled: this.isSslEnabled(),
       environment: this.getEnvironmentLabel(),
+      connectionRetryLimit: this.getConnectionRetryLimit(),
+      consumerRetryLimit: this.getConsumerRetryLimit(),
+      producerRetryLimit: this.getProducerRetryLimit(),
+      producerMaxInFlightRequests: this.getProducerMaxInFlightRequests(),
+      initialRetryTimeMs: this.getInitialRetryTimeMs(),
+      connectionTimeoutMs: this.getConnectionTimeoutMs(),
+      requestTimeoutMs: this.getRequestTimeoutMs(),
     };
   }
 

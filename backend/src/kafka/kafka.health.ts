@@ -19,6 +19,13 @@ export interface KafkaStartupDiagnostics {
   readonly clientId: string;
   readonly sslEnabled: boolean;
   readonly environment: string;
+  readonly connectionRetryLimit: number;
+  readonly consumerRetryLimit: number;
+  readonly producerRetryLimit: number;
+  readonly producerMaxInFlightRequests: number;
+  readonly initialRetryTimeMs: number;
+  readonly connectionTimeoutMs: number;
+  readonly requestTimeoutMs: number;
 }
 
 export interface KafkaHealthSnapshot {
@@ -56,17 +63,24 @@ export class KafkaHealthService {
     this.logger.log(
       `[KAFKA] Startup diagnostics :: broker=${diagnostics.brokers.join(', ')} client=${diagnostics.clientId} ssl=${diagnostics.sslEnabled} env=${diagnostics.environment}`,
     );
+    this.logger.log(
+      `[KAFKA] Retry policies active :: connection=${diagnostics.connectionRetryLimit} consumer=${diagnostics.consumerRetryLimit} producer=${diagnostics.producerRetryLimit} initialRetryMs=${diagnostics.initialRetryTimeMs}`,
+    );
+    this.logger.log(
+      `[KAFKA] Idempotent producer enabled :: maxInFlightRequests=${diagnostics.producerMaxInFlightRequests} connectionTimeoutMs=${diagnostics.connectionTimeoutMs} requestTimeoutMs=${diagnostics.requestTimeoutMs}`,
+    );
   }
 
   setClusterMetadata(cluster: KafkaClusterMetadata): void {
     this.cluster = cluster;
     this.logger.log(
-      `[KAFKA] Broker metadata :: clusterId=${cluster.clusterId ?? 'unknown'} controller=${cluster.controllerId ?? 'unknown'} brokers=${cluster.brokers.join(', ')}`,
+      `[KAFKA] Broker metadata loaded :: clusterId=${cluster.clusterId ?? 'unknown'} controller=${cluster.controllerId ?? 'unknown'} brokers=${cluster.brokers.join(', ')}`,
     );
   }
 
   markProducerConnected(): void {
     this.producerConnected = true;
+    this.logger.log('[KAFKA] Producer connected');
   }
 
   markProducerDisconnected(): void {

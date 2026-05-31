@@ -31,6 +31,13 @@ export const IGNORED_CONTAINERS: readonly string[] = [
   'aegis-demo-crash',
 ] as const;
 
+export const IGNORED_CONTAINERS_SET = new Set<string>(IGNORED_CONTAINERS);
+
+export function isIgnoredContainerName(containerName: string): boolean {
+  const normalizedName = containerName.trim().replace(/^\/+/, '');
+  return IGNORED_CONTAINERS_SET.has(normalizedName);
+}
+
 /** Maximum job retry attempts in BullMQ. */
 export const MAX_JOB_ATTEMPTS = 3;
 

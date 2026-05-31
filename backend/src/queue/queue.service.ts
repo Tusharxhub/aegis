@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue, Worker, Job, QueueEvents } from 'bullmq';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -21,7 +21,7 @@ import {
  * - QueueEvents: Monitors job lifecycle for operational telemetry.
  */
 @Injectable()
-export class QueueService implements OnModuleInit {
+export class QueueService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(QueueService.name);
   private queue!: Queue<CrashJobPayload, JobProcessingResult>;
   private worker!: Worker<CrashJobPayload, JobProcessingResult>;
@@ -95,6 +95,28 @@ export class QueueService implements OnModuleInit {
     this.queueEvents = new QueueEvents(REMEDIATION_QUEUE, { connection });
 
     this.logger.log('🚀 BullMQ queue initialized (Upstash Redis).');
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    const teardownSteps: Promise<unknown>[] = [];
+
+    if (this.worker) {
+      this.logger.log('[BULLMQ] Disconnecting worker...');
+      teardownSteps.push(this.worker.close());
+    }
+
+    if (this.queueEvents) {
+      this.logger.log('[BULLMQ] Disconnecting queue events...');
+      teardownSteps.push(this.queueEvents.close());
+    }
+
+    if (this.queue) {
+      this.logger.log('[BULLMQ] Disconnecting queue...');
+      teardownSteps.push(this.queue.close());
+    }
+
+    await Promise.allSettled(teardownSteps);
+    this.logger.log('[BULLMQ] BullMQ shutdown complete.');
   }
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -16,7 +16,7 @@ import {
   DOCKER_RECONNECT_INTERVAL_MS,
   DOCKER_MAX_RECONNECT_ATTEMPTS,
   MAX_LOG_LINES,
-  IGNORED_CONTAINERS,
+  isIgnoredContainerName,
 } from '../common/constants/index.js';
 import { KafkaProducerService } from '../kafka/kafka.producer.js';
 import { KAFKA_TOPICS } from '../kafka/kafka.constants.js';
@@ -89,6 +89,11 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
       await this.docker.ping();
       this.logger.log('✅ Docker daemon is reachable.');
 
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+
       const stream = await this.docker.getEvents({
         filters: {
           type: ['container'],
@@ -136,6 +141,10 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
   private scheduleReconnect(): void {
     if (this.isShuttingDown) return;
 
+    if (this.reconnectTimer) {
+      return;
+    }
+
     if (this.reconnectAttempts >= DOCKER_MAX_RECONNECT_ATTEMPTS) {
       this.logger.error(
         `❌ Exceeded ${DOCKER_MAX_RECONNECT_ATTEMPTS} reconnection attempts. Docker watcher is offline.`,
@@ -173,7 +182,7 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
     const containerName = raw.Actor.Attributes.name ?? 'unknown';
 
     // Skip Aegis infrastructure containers
-    if (IGNORED_CONTAINERS.some((ignored) => containerName.includes(ignored))) {
+    if (isIgnoredContainerName(containerName)) {
       return;
     }
 

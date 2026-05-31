@@ -7,6 +7,15 @@ export enum RemediationAction {
   IGNORE = 'IGNORE',
 }
 
+export type AegisEvent<TPayload = Record<string, unknown>> = {
+  readonly eventId: string;
+  readonly eventType: string;
+  readonly source: KafkaSource;
+  readonly timestamp: string;
+  readonly correlationId: string;
+  readonly payload: TPayload;
+};
+
 export type KafkaSource =
   | 'watchman'
   | 'incident-service'
@@ -14,15 +23,8 @@ export type KafkaSource =
   | 'remediation-engine'
   | 'audit-service';
 
-export interface KafkaEventEnvelope<TPayload = Record<string, unknown>> {
-  readonly eventId: string;
-  readonly eventType: string;
-  readonly source: KafkaSource;
-  readonly timestamp: string;
-  readonly correlationId: string;
-  readonly serviceName: string;
-  readonly payload: TPayload;
-}
+export type KafkaEventEnvelope<TPayload = Record<string, unknown>> =
+  AegisEvent<TPayload>;
 
 export interface ContainerEventPayload {
   readonly eventId: string;
@@ -151,7 +153,6 @@ export interface KafkaPublishContext<TPayload> {
   readonly payload: TPayload;
   readonly correlationId?: string;
   readonly eventId?: string;
-  readonly serviceName?: string;
   readonly timestamp?: string;
 }
 
@@ -175,6 +176,60 @@ function hasNumber(value: Record<string, unknown>, key: string): boolean {
   return typeof candidate === 'number' && Number.isFinite(candidate);
 }
 
+function normalizeAegisValue(value: unknown): unknown {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => {
+      const normalized = normalizeAegisValue(entry);
+      return normalized === undefined ? null : normalized;
+    });
+  }
+
+  if (isRecord(value)) {
+    const normalized: Record<string, unknown> = {};
+
+    for (const key of Object.keys(value).sort()) {
+      const candidate = normalizeAegisValue(value[key]);
+      if (candidate !== undefined) {
+        normalized[key] = candidate;
+      }
+    }
+
+    return normalized;
+  }
+
+  return '[unserializable value]';
+}
+
+export function serializeAegisEvent<TPayload extends Record<string, unknown>>(
+  event: AegisEvent<TPayload> | KafkaEventEnvelope<TPayload>,
+): string {
+  return JSON.stringify(normalizeAegisValue(event));
+}
+
 export function isKafkaEventEnvelope(
   value: unknown,
 ): value is KafkaEventEnvelope {
@@ -185,7 +240,6 @@ export function isKafkaEventEnvelope(
     hasString(value, 'source') &&
     hasString(value, 'timestamp') &&
     hasString(value, 'correlationId') &&
-    hasString(value, 'serviceName') &&
     isRecord(value.payload)
   );
 }

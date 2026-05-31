@@ -74,8 +74,10 @@ export class KafkaConsumerService
       brokers: this.getBrokers(),
       ssl: this.kafkaConfig.isSslEnabled(),
       logLevel: logLevel.ERROR,
+      connectionTimeout: this.kafkaConfig.getConnectionTimeoutMs(),
+      requestTimeout: this.kafkaConfig.getRequestTimeoutMs(),
       retry: {
-        retries: this.kafkaConfig.getConsumerRetryLimit(),
+        retries: this.kafkaConfig.getConnectionRetryLimit(),
       },
     });
   }
@@ -111,7 +113,7 @@ export class KafkaConsumerService
             return undefined;
           },
           {
-            retries: this.kafkaConfig.getConsumerRetryLimit(),
+            retries: this.kafkaConfig.getConnectionRetryLimit(),
             delayMs: 250,
           },
         );
@@ -162,9 +164,16 @@ export class KafkaConsumerService
     this.started = true;
     this.logger.log('[KAFKA] Kafka consumers connected');
     this.logger.log('[KAFKA] Subscribed topics initialized');
+    this.logger.log('[KAFKA] Consumers subscribed');
   }
 
   async stop(): Promise<void> {
+    if (!this.started && this.consumers.size === 0) {
+      return;
+    }
+
+    this.logger.log('[KAFKA] Disconnecting consumers...');
+
     const disconnectJobs = Array.from(this.consumers.entries()).map(
       async ([groupId, consumer]) => {
         try {

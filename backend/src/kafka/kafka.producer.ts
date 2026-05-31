@@ -6,9 +6,10 @@ import {
 } from '@nestjs/common';
 import { Kafka, Partitioners, type Producer } from 'kafkajs';
 import { randomUUID } from 'crypto';
-import { KAFKA_SERVICE_NAME, type KafkaTopic } from './kafka.constants.js';
+import { type KafkaTopic } from './kafka.constants.js';
 import { KafkaConfigService } from './kafka.config.js';
 import { KafkaHealthService } from './kafka.health.js';
+import { serializeAegisEvent } from './kafka.types.js';
 import type {
   KafkaEventEnvelope,
   KafkaPayloadForTopic,
@@ -48,13 +49,15 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private buildKafka(): Kafka {
+    process.env.KAFKAJS_NO_PARTITIONER_WARNING = '1';
+
     return new Kafka({
       clientId: this.getClientId(),
       brokers: this.getBrokers(),
       ssl: this.kafkaConfig.isSslEnabled(),
       retry: {
-        initialRetryTime: 300,
-        retries: this.kafkaConfig.getProducerRetryLimit(),
+        initialRetryTime: this.kafkaConfig.getInitialRetryTimeMs(),
+        retries: this.kafkaConfig.getConnectionRetryLimit(),
       },
     });
   }
@@ -68,6 +71,7 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
     this.producer ??= this.kafka.producer({
       createPartitioner: Partitioners.LegacyPartitioner,
       idempotent: true,
+      maxInFlightRequests: this.kafkaConfig.getProducerMaxInFlightRequests(),
       allowAutoTopicCreation: true,
       retry: {
         retries: this.kafkaConfig.getProducerRetryLimit(),
@@ -88,7 +92,7 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
         return undefined;
       },
       {
-        retries: this.kafkaConfig.getProducerRetryLimit(),
+        retries: this.kafkaConfig.getConnectionRetryLimit(),
         delayMs: 250,
       },
     );
@@ -97,6 +101,8 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
     this.ready = true;
     this.health.markProducerConnected();
     this.logger.log('[KAFKA] Kafka producer connected');
+    this.logger.log('[KAFKA] Retry policies active');
+    this.logger.log('[KAFKA] Idempotent producer enabled');
   }
 
   async disconnect(): Promise<void> {
@@ -128,7 +134,6 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
       source: context.source,
       timestamp: context.timestamp ?? new Date().toISOString(),
       correlationId: context.correlationId ?? randomUUID(),
-      serviceName: context.serviceName ?? KAFKA_SERVICE_NAME,
       payload: context.payload,
     };
 
@@ -146,7 +151,7 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
         messages: [
           {
             key: envelope.correlationId,
-            value: JSON.stringify(envelope),
+            value: serializeAegisEvent(envelope),
             timestamp: messageTimestamp,
             headers: {
               eventType: envelope.eventType,
