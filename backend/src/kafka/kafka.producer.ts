@@ -4,28 +4,16 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Kafka, type Producer } from 'kafkajs';
+import { Kafka, Partitioners, type Producer } from 'kafkajs';
 import { randomUUID } from 'crypto';
-import {
-  KAFKA_SERVICE_NAME,
-  KAFKA_TOPICS,
-  type KafkaTopic,
-} from './kafka.constants.js';
+import { KAFKA_SERVICE_NAME, type KafkaTopic } from './kafka.constants.js';
+import { KafkaConfigService } from './kafka.config.js';
 import { KafkaHealthService } from './kafka.health.js';
 import type {
   KafkaEventEnvelope,
   KafkaPayloadForTopic,
   KafkaPublishContext,
 } from './kafka.types.js';
-
-function parseBoolean(value: string | undefined, fallback = false): boolean {
-  if (value === undefined) {
-    return fallback;
-  }
-
-  return value.toLowerCase() === 'true';
-}
 
 @Injectable()
 export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
@@ -35,7 +23,7 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
   private ready = false;
 
   constructor(
-    private readonly configService: ConfigService,
+    private readonly kafkaConfig: KafkaConfigService,
     private readonly health: KafkaHealthService,
   ) {}
 
@@ -52,28 +40,21 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private getBrokers(): string[] {
-    const configured =
-      this.configService.get<string>('KAFKA_BROKER') ?? 'aegis-kafka:9092';
-    return configured
-      .split(',')
-      .map((broker) => broker.trim())
-      .filter(Boolean);
+    return this.kafkaConfig.getBrokers();
   }
 
   private getClientId(): string {
-    return (
-      this.configService.get<string>('KAFKA_CLIENT_ID') ?? 'aegis-orchestrator'
-    );
+    return this.kafkaConfig.getClientId();
   }
 
   private buildKafka(): Kafka {
     return new Kafka({
       clientId: this.getClientId(),
       brokers: this.getBrokers(),
-      ssl: parseBoolean(this.configService.get<string>('KAFKA_SSL'), false),
+      ssl: this.kafkaConfig.isSslEnabled(),
       retry: {
         initialRetryTime: 300,
-        retries: 8,
+        retries: this.kafkaConfig.getProducerRetryLimit(),
       },
     });
   }
@@ -85,20 +66,37 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
 
     this.kafka ??= this.buildKafka();
     this.producer ??= this.kafka.producer({
+      createPartitioner: Partitioners.LegacyPartitioner,
       idempotent: true,
       allowAutoTopicCreation: true,
       retry: {
-        retries: 8,
+        retries: this.kafkaConfig.getProducerRetryLimit(),
       },
     });
 
-    await this.producer.connect();
-    this.ready = true;
     this.health.setBroker(this.getBrokers());
-    this.health.markProducerConnected();
+    this.health.setStartupDiagnostics(this.kafkaConfig.getDiagnostics());
+
     this.logger.log(
-      `✅ Kafka producer connected: ${this.getBrokers().join(', ')}`,
+      `[KAFKA] Connecting to broker: ${this.getBrokers().join(', ')}`,
     );
+
+    await this.health.withRetry(
+      'Kafka producer connection',
+      async () => {
+        await this.producer!.connect();
+        return undefined;
+      },
+      {
+        retries: this.kafkaConfig.getProducerRetryLimit(),
+        delayMs: 250,
+      },
+    );
+
+    await this.health.captureClusterMetadata(this.kafka);
+    this.ready = true;
+    this.health.markProducerConnected();
+    this.logger.log('[KAFKA] Kafka producer connected');
   }
 
   async disconnect(): Promise<void> {
@@ -163,7 +161,7 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
       this.health.markPublished(envelope.timestamp);
       this.health.setError(null);
       this.logger.debug(
-        `📤 Kafka publish succeeded: ${topic} :: ${envelope.eventType}`,
+        `[KAFKA] Publish succeeded :: topic=${topic} eventType=${envelope.eventType}`,
       );
       return true;
     } catch (error: unknown) {

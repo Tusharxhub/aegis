@@ -4,7 +4,6 @@ import {
   OnApplicationShutdown,
   OnModuleInit,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import {
   Kafka,
   logLevel,
@@ -12,13 +11,12 @@ import {
   type EachMessagePayload,
 } from 'kafkajs';
 import { AegisGateway } from '../gateway/events.gateway.js';
-import { OperationalEventName } from '../common/interfaces/operational-event.interface.js';
 import {
-  KAFKA_CONSUMER_GROUPS,
   KAFKA_CONSUMER_SUBSCRIPTIONS,
   type KafkaConsumerGroupId,
   type KafkaTopic,
 } from './kafka.constants.js';
+import { KafkaConfigService } from './kafka.config.js';
 import { KafkaHealthService } from './kafka.health.js';
 import {
   isKafkaEventEnvelope,
@@ -43,7 +41,7 @@ export class KafkaConsumerService
   private started = false;
 
   constructor(
-    private readonly configService: ConfigService,
+    private readonly kafkaConfig: KafkaConfigService,
     private readonly gateway: AegisGateway,
     private readonly health: KafkaHealthService,
   ) {}
@@ -63,29 +61,21 @@ export class KafkaConsumerService
   }
 
   private getBrokers(): string[] {
-    const configured =
-      this.configService.get<string>('KAFKA_BROKER') ?? 'aegis-kafka:9092';
-
-    return configured
-      .split(',')
-      .map((broker) => broker.trim())
-      .filter(Boolean);
+    return this.kafkaConfig.getBrokers();
   }
 
   private getClientId(): string {
-    return (
-      this.configService.get<string>('KAFKA_CLIENT_ID') ?? 'aegis-orchestrator'
-    );
+    return this.kafkaConfig.getClientId();
   }
 
   private buildKafka(): Kafka {
     return new Kafka({
       clientId: this.getClientId(),
       brokers: this.getBrokers(),
-      ssl: false,
+      ssl: this.kafkaConfig.isSslEnabled(),
       logLevel: logLevel.ERROR,
       retry: {
-        retries: 8,
+        retries: this.kafkaConfig.getConsumerRetryLimit(),
       },
     });
   }
@@ -97,6 +87,11 @@ export class KafkaConsumerService
 
     this.kafka ??= this.buildKafka();
     this.health.setBroker(this.getBrokers());
+    this.health.setStartupDiagnostics(this.kafkaConfig.getDiagnostics());
+
+    this.logger.log(
+      `[KAFKA] Connecting to broker: ${this.getBrokers().join(', ')}`,
+    );
 
     const consumerEntries: Array<
       [KafkaConsumerGroupId, readonly KafkaTopic[]]
@@ -109,10 +104,30 @@ export class KafkaConsumerService
       this.consumers.set(groupId, consumer);
 
       try {
-        await consumer.connect();
+        await this.health.withRetry(
+          `Kafka consumer connection for ${groupId}`,
+          async () => {
+            await consumer.connect();
+            return undefined;
+          },
+          {
+            retries: this.kafkaConfig.getConsumerRetryLimit(),
+            delayMs: 250,
+          },
+        );
 
         for (const topic of topics) {
-          await consumer.subscribe({ topic, fromBeginning: false });
+          await this.health.withRetry(
+            `Kafka consumer subscription for ${groupId} -> ${topic}`,
+            async () => {
+              await consumer.subscribe({ topic, fromBeginning: false });
+              return undefined;
+            },
+            {
+              retries: 3,
+              delayMs: 150,
+            },
+          );
         }
 
         this.health.markConsumerState(groupId, true, topics);
@@ -145,9 +160,8 @@ export class KafkaConsumerService
     await Promise.all(consumerStarts);
 
     this.started = true;
-    this.logger.log(
-      `✅ Kafka consumers started for groups: ${Object.values(KAFKA_CONSUMER_GROUPS).join(', ')}`,
-    );
+    this.logger.log('[KAFKA] Kafka consumers connected');
+    this.logger.log('[KAFKA] Subscribed topics initialized');
   }
 
   async stop(): Promise<void> {
@@ -173,7 +187,7 @@ export class KafkaConsumerService
     await Promise.allSettled(disconnectJobs);
 
     if (disconnectJobs.length > 0) {
-      this.logger.log('🛑 Kafka consumers stopped gracefully.');
+      this.logger.log('[KAFKA] Kafka consumers stopped gracefully');
     }
 
     this.consumers.clear();
@@ -223,6 +237,8 @@ export class KafkaConsumerService
       receivedAt: new Date().toISOString(),
       payloadSummary: this.summarizePayload(parsed.payload),
     };
+
+    void streamEvent;
 
     this.logger.debug(
       `[${groupId}] ${message.topic} :: ${parsed.eventType} :: ${parsed.correlationId}`,
