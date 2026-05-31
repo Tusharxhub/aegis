@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # 1. Relational Database & State Cache (Redis)
+  # 1. State Cache (Redis) — configured for BullMQ queue workloads
   aegis-redis:
     image: redis:7.0-alpine
     container_name: aegis-redis
@@ -10,6 +10,8 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+      - ./infrastructure/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
     networks:
       - aegis-network
     healthcheck:
@@ -18,7 +20,7 @@ services:
       timeout: 3s
       retries: 5
 
-  # 2. Replay Buffer Database (MongoDB)
+  # 2. Infrastructure Ledger (MongoDB)
   aegis-mongo:
     image: mongo:6.0
     container_name: aegis-mongo
@@ -27,6 +29,7 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+      - ./infrastructure/mongodb/init.js:/docker-entrypoint-initdb.d/init.js:ro
     networks:
       - aegis-network
     healthcheck:
@@ -35,34 +38,25 @@ services:
       timeout: 5s
       retries: 5
 
-  # 3. Kafka Event Backbone (KRaft)
+  # 3. Kafka Event Backbone (KRaft mode — no Zookeeper)
   aegis-kafka:
     image: bitnami/kafka:latest
     container_name: aegis-kafka
     restart: unless-stopped
     ports:
       - "9092:9092"
-    environment:
-      - ALLOW_PLAINTEXT_LISTENER=yes
-      - KAFKA_ENABLE_KRAFT=yes
-      - KAFKA_CFG_NODE_ID=1
-      - KAFKA_CFG_PROCESS_ROLES=broker,controller
-      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@aegis-kafka:9093
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://aegis-kafka:9092
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
-      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=1
-      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
-      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=1
-      - KAFKA_CFG_MIN_INSYNC_REPLICAS=1
-      - KAFKA_CFG_LOG_DIRS=/bitnami/kafka/data
+    env_file:
+      - ./infrastructure/kafka/broker.env
     volumes:
       - kafka_data:/bitnami/kafka
     networks:
       - aegis-network
+    healthcheck:
+      test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   # 4. Kafka UI (optional, local operator console)
   kafka-ui:
@@ -79,29 +73,34 @@ services:
     networks:
       - aegis-network
 
-  # 5. Custom AI Inference Engine (Python Sentence-Transformers & FAISS)
+  # 5. AI Inference Engine (Python — SentenceTransformers + FAISS + Kafka)
   aegis-ai-engine:
     build:
       context: ./services/ai-engine
       dockerfile: Dockerfile
     container_name: aegis-ai-engine
     restart: unless-stopped
-    ports:
-      - "8000:8000"
     environment:
       - PORT=8000
       - HOST=0.0.0.0
       - MONGO_URI=mongodb://aegis-mongo:27017/aegis
+      - KAFKA_BROKER=aegis-kafka:9092
     volumes:
       - ai_model_store:/app/models
       - ai_vector_store:/app/vectorstore/storage
+    depends_on:
+      aegis-kafka:
+        condition: service_healthy
+      aegis-mongo:
+        condition: service_healthy
     networks:
       - aegis-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 60s
 
   # 3. SRE Orchestrator (NestJS)
   aegis-nestjs:

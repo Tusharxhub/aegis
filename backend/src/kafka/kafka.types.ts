@@ -103,13 +103,16 @@ export interface RemediationCompletedPayload {
   readonly completedAt: string;
 }
 
-export interface MetricsSnapshotPayload {
-  readonly snapshotId: string;
-  readonly source: 'orchestrator' | 'rl-coordinator' | 'scheduler';
-  readonly collectedAt: string;
-  readonly cpuUsage: number;
-  readonly memoryUsage: number;
-  readonly diskUsage: number;
+export interface RlFeedbackPayload {
+  readonly feedbackId: string;
+  readonly episodeId: string;
+  readonly containerId: string;
+  readonly containerName: string;
+  readonly actionTaken: RemediationAction;
+  readonly reward: number;
+  readonly isHealthy: boolean;
+  readonly stateVectorDim: number;
+  readonly recordedAt: string;
 }
 
 export interface AuditEventPayload {
@@ -135,8 +138,8 @@ export interface KafkaTopicPayloadMap {
   [KAFKA_TOPICS.AI_DIAGNOSIS_COMPLETED]: AiDiagnosisCompletedPayload;
   [KAFKA_TOPICS.REMEDIATION_STARTED]: RemediationStartedPayload;
   [KAFKA_TOPICS.REMEDIATION_COMPLETED]: RemediationCompletedPayload;
-  [KAFKA_TOPICS.METRICS_SNAPSHOTS]: MetricsSnapshotPayload;
   [KAFKA_TOPICS.AUDIT_EVENTS]: AuditEventPayload;
+  [KAFKA_TOPICS.RL_FEEDBACK]: RlFeedbackPayload;
 }
 
 export type KafkaPayloadForTopic<TTopic extends KafkaTopic> =
@@ -287,17 +290,20 @@ export function isRemediationCompletedPayload(
   );
 }
 
-export function isMetricsSnapshotPayload(
+export function isRlFeedbackPayload(
   value: unknown,
-): value is MetricsSnapshotPayload {
+): value is RlFeedbackPayload {
   return (
     isRecord(value) &&
-    hasString(value, 'snapshotId') &&
-    hasString(value, 'source') &&
-    hasString(value, 'collectedAt') &&
-    hasNumber(value, 'cpuUsage') &&
-    hasNumber(value, 'memoryUsage') &&
-    hasNumber(value, 'diskUsage')
+    hasString(value, 'feedbackId') &&
+    hasString(value, 'episodeId') &&
+    hasString(value, 'containerId') &&
+    hasString(value, 'containerName') &&
+    hasString(value, 'actionTaken') &&
+    hasNumber(value, 'reward') &&
+    typeof value.isHealthy === 'boolean' &&
+    hasNumber(value, 'stateVectorDim') &&
+    hasString(value, 'recordedAt')
   );
 }
 
@@ -334,10 +340,10 @@ export function isTopicPayload<TTopic extends KafkaTopic>(
       return isRemediationStartedPayload(payload);
     case KAFKA_TOPICS.REMEDIATION_COMPLETED:
       return isRemediationCompletedPayload(payload);
-    case KAFKA_TOPICS.METRICS_SNAPSHOTS:
-      return isMetricsSnapshotPayload(payload);
     case KAFKA_TOPICS.AUDIT_EVENTS:
       return isAuditEventPayload(payload);
+    case KAFKA_TOPICS.RL_FEEDBACK:
+      return isRlFeedbackPayload(payload);
     default:
       return false;
   }

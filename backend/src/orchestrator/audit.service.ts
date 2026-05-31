@@ -56,7 +56,7 @@ export class AuditService {
     eventType: EventType,
     exitCode: number,
     logs: string,
-    metadata: any,
+    metadata: Record<string, unknown>,
   ) {
     try {
       return await this.mongoService.EventModel.create({

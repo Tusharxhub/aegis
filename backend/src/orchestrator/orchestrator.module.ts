@@ -7,9 +7,10 @@ import { DockerModule } from '../docker/docker.module.js';
 import { QueueModule } from '../queue/queue.module.js';
 import { AiAgentModule } from '../ai-agent/ai-agent.module.js';
 import { GatewayModule } from '../gateway/gateway.module.js';
+import { KafkaModule } from '../kafka/kafka.module.js';
 
 @Module({
-  imports: [DockerModule, QueueModule, AiAgentModule, GatewayModule],
+  imports: [DockerModule, QueueModule, AiAgentModule, GatewayModule, KafkaModule],
   controllers: [OrchestratorController],
   providers: [OrchestratorService, AuditService, RemediationEngine],
   exports: [OrchestratorService, AuditService, RemediationEngine],

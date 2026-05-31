@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { ScheduleModule } from '@nestjs/schedule';
 import { MongoModule } from './mongo/mongo.module.js';
 import { DockerModule } from './docker/docker.module.js';
 import { QueueModule } from './queue/queue.module.js';
@@ -23,16 +22,13 @@ import { KafkaModule } from './kafka/kafka.module.js';
       envFilePath: ['.env', '../.env'],
     }),
 
-    // Internal decoupled events bus
+    // Internal decoupled event bus
     EventEmitterModule.forRoot({
       wildcard: false,
       delimiter: '.',
       maxListeners: 20,
       verboseMemoryLeak: true,
     }),
-
-    // Cron scheduler
-    ScheduleModule.forRoot(),
 
     // Relational/Document Database Layer (MongoDB)
     MongoModule,

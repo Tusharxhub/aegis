@@ -2,20 +2,26 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 export interface SimilarIncident {
-  incident_id: string;
-  log_text: string;
-  label: string;
-  score: number;
+  readonly incident_id: string;
+  readonly log_text: string;
+  readonly label: string;
+  readonly score: number;
 }
 
 export interface DiagnoseResponse {
-  incidentType: string;
-  analysis: string;
-  confidenceScore: number;
-  riskLevel: 'LOW' | 'HIGH';
-  suggestedAction: 'RESTART_CONTAINER' | 'STOP_CONTAINER' | 'IGNORE';
-  reasoning: string;
-  similarIncidents?: SimilarIncident[];
+  readonly incidentType: string;
+  readonly analysis: string;
+  readonly confidenceScore: number;
+  readonly riskLevel: 'LOW' | 'HIGH';
+  readonly suggestedAction: 'RESTART_CONTAINER' | 'STOP_CONTAINER' | 'IGNORE';
+  readonly reasoning: string;
+  readonly similarIncidents?: SimilarIncident[];
+  /**
+   * The SentenceTransformer embedding vector used during classification.
+   * Returned by the AI engine so the orchestrator can persist real vectors
+   * instead of synthetic noise. Absent if the AI engine is unreachable.
+   */
+  readonly embedding?: number[];
 }
 
 @Injectable()

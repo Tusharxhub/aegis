@@ -1,0 +1,8 @@
+# Project Aegis — RL Lab Python Dependencies
+# Offline training only. No runtime infrastructure access.
+
+gymnasium==0.29.1
+stable-baselines3[extra]==2.6.0
+torch==2.7.0
+numpy==1.26.4
+pymongo==4.13.0

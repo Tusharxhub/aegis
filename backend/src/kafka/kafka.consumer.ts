@@ -224,14 +224,6 @@ export class KafkaConsumerService
       payloadSummary: this.summarizePayload(parsed.payload),
     };
 
-    if (groupId === KAFKA_CONSUMER_GROUPS.DASHBOARD) {
-      this.gateway.broadcast(OperationalEventName.KAFKA_EVENT, streamEvent);
-      this.gateway.broadcast(
-        OperationalEventName.KAFKA_HEALTH,
-        this.health.getSnapshot(),
-      );
-    }
-
     this.logger.debug(
       `[${groupId}] ${message.topic} :: ${parsed.eventType} :: ${parsed.correlationId}`,
     );

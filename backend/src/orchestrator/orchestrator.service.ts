@@ -1,7 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
-import { Cron } from '@nestjs/schedule';
 import { randomUUID } from 'crypto';
 import type { Job } from 'bullmq';
 import { DockerService } from '../docker/docker.service.js';
@@ -46,36 +45,8 @@ export class OrchestratorService implements OnModuleInit {
 
   onModuleInit(): void {
     this.logger.log(
-      '🧠 Core Relational Orchestrator online — custom AI pipelines loaded.',
+      '🧠 Aegis Orchestration Core online — Kafka-native remediation pipeline active.',
     );
-  }
-
-  /**
-   * Daily 3:00 AM Cron task to trigger classification checks or model updates if necessary.
-   */
-  @Cron('0 0 3 * * *')
-  async handleDailyTraining(): Promise<void> {
-    this.logger.log('📅 Scheduled daily audit task triggered at 3:00 AM.');
-    // In local CPU setup, logging metrics for training evaluation
-    const cpuUsage = 0.12;
-    const memoryUsage = 0.45;
-    const diskUsage = 0.08;
-
-    await this.auditService.logMetrics(cpuUsage, memoryUsage, diskUsage);
-
-    void this.kafkaProducer.publish(KAFKA_TOPICS.METRICS_SNAPSHOTS, {
-      eventType: 'METRICS_SNAPSHOT_RECORDED',
-      source: 'audit-service',
-      correlationId: 'daily-training-window',
-      payload: {
-        snapshotId: randomUUID(),
-        source: 'scheduler',
-        collectedAt: new Date().toISOString(),
-        cpuUsage,
-        memoryUsage,
-        diskUsage,
-      },
-    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -262,13 +233,14 @@ export class OrchestratorService implements OnModuleInit {
       // 2. Call local Custom AI Microservice
       const diagnosis = await this.aiAgent.diagnoseLogs(event.logs);
 
-      // 3. Save AI embeddings (simulated dummy array or mock values from database score)
-      const mockEmbedding = new Array(384)
-        .fill(0)
-        .map(() => Math.random() * 2 - 1);
+      // 3. Store real embeddings from AI engine response in MongoDB ledger
+      //    The AI engine returns the embedding vector used during classification.
+      //    This is the actual SentenceTransformer output, not synthetic data.
+      const diagnosisEmbedding: number[] =
+        diagnosis.embedding ?? new Array(384).fill(0);
       await this.auditService.logIncidentEmbedding(
         dbEvent.id,
-        mockEmbedding,
+        diagnosisEmbedding,
         diagnosis.incidentType,
       );
 

@@ -1,0 +1,86 @@
+{
+  "_comment": "Project Aegis — Kafka topic provisioning manifest. Apply with kafka-topics.sh or the init script.",
+  "topics": [
+    {
+      "name": "aegis.container.events",
+      "partitions": 3,
+      "replicationFactor": 1,
+      "configs": {
+        "retention.ms": "604800000",
+        "cleanup.policy": "delete",
+        "compression.type": "lz4"
+      }
+    },
+    {
+      "name": "aegis.incident.detected",
+      "partitions": 3,
+      "replicationFactor": 1,
+      "configs": {
+        "retention.ms": "604800000",
+        "cleanup.policy": "delete",
+        "compression.type": "lz4"
+      }
+    },
+    {
+      "name": "aegis.logs.extracted",
+      "partitions": 3,
+      "replicationFactor": 1,
+      "configs": {
+        "retention.ms": "259200000",
+        "cleanup.policy": "delete",
+        "compression.type": "lz4",
+        "max.message.bytes": "10485760"
+      }
+    },
+    {
+      "name": "aegis.ai.diagnosis.completed",
+      "partitions": 3,
+      "replicationFactor": 1,
+      "configs": {
+        "retention.ms": "604800000",
+        "cleanup.policy": "delete",
+        "compression.type": "lz4"
+      }
+    },
+    {
+      "name": "aegis.remediation.started",
+      "partitions": 3,
+      "replicationFactor": 1,
+      "configs": {
+        "retention.ms": "2592000000",
+        "cleanup.policy": "delete",
+        "compression.type": "lz4"
+      }
+    },
+    {
+      "name": "aegis.remediation.completed",
+      "partitions": 3,
+      "replicationFactor": 1,
+      "configs": {
+        "retention.ms": "2592000000",
+        "cleanup.policy": "delete",
+        "compression.type": "lz4"
+      }
+    },
+    {
+      "name": "aegis.audit.events",
+      "partitions": 3,
+      "replicationFactor": 1,
+      "configs": {
+        "retention.ms": "7776000000",
+        "cleanup.policy": "delete",
+        "compression.type": "lz4"
+      }
+    },
+    {
+      "name": "aegis.rl.feedback",
+      "partitions": 3,
+      "replicationFactor": 1,
+      "configs": {
+        "retention.ms": "7776000000",
+        "cleanup.policy": "delete",
+        "compression.type": "lz4"
+      }
+    }
+  ]
+}

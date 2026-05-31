@@ -5,9 +5,6 @@
 /** BullMQ queue name for crash remediation jobs. */
 export const REMEDIATION_QUEUE = 'aegis-remediation' as const;
 
-/** BullMQ queue name for telemetry/metrics jobs. */
-export const TELEMETRY_QUEUE = 'aegis-telemetry' as const;
-
 /** Default confidence threshold for auto-remediation. */
 export const DEFAULT_CONFIDENCE_THRESHOLD = 0.8;
 
@@ -24,8 +21,11 @@ export const DOCKER_MAX_RECONNECT_ATTEMPTS = 50;
 export const IGNORED_CONTAINERS: readonly string[] = [
   'aegis-mongo',
   'aegis-redis',
-  'aegis-rl-brain',
+  'aegis-kafka',
+  'aegis-kafka-ui',
+  'aegis-ai-engine',
   'aegis-nestjs',
+  'aegis-control-plane',
 ] as const;
 
 /** Maximum job retry attempts in BullMQ. */

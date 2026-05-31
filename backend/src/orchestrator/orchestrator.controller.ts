@@ -1,97 +1,80 @@
 import {
   Controller,
-  Post,
   Get,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { MongoService } from '../mongo/mongo.service.js';
+import { KafkaProducerService } from '../kafka/kafka.producer.js';
+import type { KafkaHealthSnapshot } from '../kafka/kafka.health.js';
 
+/**
+ * OrchestratorController — Infrastructure status and health endpoints.
+ *
+ * This is a headless backend platform. These endpoints are for:
+ * - Infrastructure observability (liveness, readiness)
+ * - Kafka pipeline health
+ * - Incident ledger inspection (operator tooling)
+ *
+ * There are no frontend-facing APIs. No client-side state is served here.
+ */
 @Controller('orchestrator')
 export class OrchestratorController {
-  constructor(private readonly mongoService: MongoService) {}
+  private readonly logger = new Logger(OrchestratorController.name);
+
+  constructor(
+    private readonly mongoService: MongoService,
+    private readonly kafkaProducer: KafkaProducerService,
+  ) {}
 
   /**
-   * Manual Training Trigger.
-   * Returns validation checks on the local Custom AI Head.
+   * Returns current Kafka producer health snapshot.
    */
-  @Post('train')
-  triggerTraining(): any {
-    try {
-      return {
-        success: true,
-        message:
-          'Project Aegis Custom MLP classification head is online and fully trained on CPU.',
-        episodes_processed: 300,
-        average_historical_reward: 0.94,
-      };
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new InternalServerErrorException(
-        `Failed to trigger training: ${message}`,
-      );
-    }
+  @Get('health/kafka')
+  getKafkaHealth(): KafkaHealthSnapshot {
+    return this.kafkaProducer.getHealthSnapshot();
   }
 
   /**
-   * Retrieve historical audit incident logs formatted for the dashboard.
+   * Returns the last 50 remediation plans from the infrastructure ledger.
+   * Intended for operator inspection, not frontend consumption.
    */
-  @Get('episodes')
-  async getRecentEpisodes(): Promise<any[]> {
+  @Get('ledger/incidents')
+  async getRecentIncidents(): Promise<unknown[]> {
     try {
-      const plans = await this.mongoService.PlanModel.find()
+      return await this.mongoService.PlanModel.find()
         .sort({ createdAt: -1 })
         .limit(50)
         .populate({
           path: 'event',
-          populate: {
-            path: 'service',
-          },
+          populate: { path: 'service' },
         })
+        .lean()
         .exec();
-
-      // Map Mongoose documents to dashboard shape
-      return plans.map((p) => {
-        let actionIdx = 0; // IGNORE
-        if (p.suggestedAction === 'RESTART_CONTAINER') {
-          actionIdx = 1;
-        } else if (p.suggestedAction === 'STOP_CONTAINER') {
-          actionIdx = 2;
-        }
-
-        const event = p.event;
-        const service = event?.service;
-
-        return {
-          _id: p._id.toString(),
-          timestamp: p.createdAt.toISOString(),
-          containerName: service?.name ?? 'unknown',
-          imageName: service?.imageName ?? 'unknown',
-          eventType: event?.eventType?.toLowerCase() ?? 'die',
-          exitCode: event?.exitCode ?? 0,
-          action_taken: actionIdx,
-          reward: p.confidenceScore, // Display ML confidence score
-          state_vector: [p.confidenceScore, event?.exitCode ?? 0],
-        };
-      });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to retrieve incident ledger: ${message}`);
       throw new InternalServerErrorException(
-        `Failed to retrieve incidents: ${message}`,
+        `Ledger query failed: ${message}`,
       );
     }
   }
 
   /**
-   * Retrieve current service states.
+   * Returns the current infrastructure service registry.
    */
-  @Get('services')
-  async getServices(): Promise<any[]> {
+  @Get('ledger/services')
+  async getServiceRegistry(): Promise<unknown[]> {
     try {
-      return await this.mongoService.ServiceModel.find().exec();
+      return await this.mongoService.ServiceModel.find()
+        .sort({ lastSeenAt: -1 })
+        .lean()
+        .exec();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to retrieve service registry: ${message}`);
       throw new InternalServerErrorException(
-        `Failed to retrieve services: ${message}`,
+        `Service registry query failed: ${message}`,
       );
     }
   }
