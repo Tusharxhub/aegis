@@ -121,6 +121,7 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
       readonly payload: KafkaPayloadForTopic<TTopic>;
     },
   ): Promise<boolean> {
+    const messageTimestamp = Date.now().toString();
     const envelope: KafkaEventEnvelope<Record<string, unknown>> = {
       eventId: context.eventId ?? randomUUID(),
       eventType: context.eventType,
@@ -146,13 +147,12 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
           {
             key: envelope.correlationId,
             value: JSON.stringify(envelope),
-            timestamp: envelope.timestamp,
+            timestamp: messageTimestamp,
             headers: {
-              'event-id': envelope.eventId,
-              'event-type': envelope.eventType,
+              eventType: envelope.eventType,
+              correlationId: envelope.correlationId,
               source: envelope.source,
-              'service-name': envelope.serviceName,
-              'correlation-id': envelope.correlationId,
+              timestamp: messageTimestamp,
             },
           },
         ],

@@ -28,6 +28,8 @@ export interface DiagnoseResponse {
 export class AiAgentService {
   private readonly logger = new Logger(AiAgentService.name);
   private readonly aiEngineUrl: string;
+  private readonly requestTimeoutMs = 15_000;
+  private readonly maxRetries = 3;
 
   constructor(private readonly configService: ConfigService) {
     this.aiEngineUrl =
@@ -45,22 +47,7 @@ export class AiAgentService {
     );
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ log_text: logs }),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(
-          `AI Engine returned HTTP ${response.status}: ${errorBody}`,
-        );
-      }
-
-      const data = (await response.json()) as DiagnoseResponse;
+      const data = await this.requestDiagnosis(url, logs);
       this.logger.log(
         `✅ Diagnosis complete: Class [${data.incidentType}] | Suggestion: ${data.suggestedAction} (Confidence: ${data.confidenceScore.toFixed(2)})`,
       );
@@ -82,5 +69,64 @@ export class AiAgentService {
         similarIncidents: [],
       };
     }
+  }
+
+  private async requestDiagnosis(
+    url: string,
+    logs: string,
+  ): Promise<DiagnoseResponse> {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ log_text: logs }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          const errorBody = await response.text();
+          throw new Error(
+            `AI Engine returned HTTP ${response.status}: ${errorBody}`,
+          );
+        }
+
+        return (await response.json()) as DiagnoseResponse;
+      } catch (error: unknown) {
+        lastError = error;
+        const message =
+          error instanceof Error && error.name === 'AbortError'
+            ? `timed out after ${this.requestTimeoutMs}ms`
+            : error instanceof Error
+              ? error.message
+              : String(error);
+
+        if (attempt >= this.maxRetries) {
+          throw new Error(message);
+        }
+
+        this.logger.warn(
+          `AI Engine request failed on attempt ${attempt}/${this.maxRetries}: ${message}. Retrying...`,
+        );
+        await this.sleep(250 * attempt);
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('AI Engine request failed unexpectedly');
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

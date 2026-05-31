@@ -19,13 +19,16 @@ export const DOCKER_MAX_RECONNECT_ATTEMPTS = 50;
 
 /** Containers to ignore when watching for crashes (Aegis infra containers). */
 export const IGNORED_CONTAINERS: readonly string[] = [
-  'aegis-mongo',
-  'aegis-redis',
+  'aegis-mongodb',
   'aegis-kafka',
-  'aegis-kafka-ui',
+  'aegis-redis',
   'aegis-ai-engine',
-  'aegis-nestjs',
   'aegis-control-plane',
+  'aegis-mongo',
+  'aegis-kafka-ui',
+  'aegis-postgres',
+  'aegis-frontend',
+  'aegis-demo-crash',
 ] as const;
 
 /** Maximum job retry attempts in BullMQ. */

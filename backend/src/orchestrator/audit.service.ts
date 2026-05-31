@@ -39,7 +39,7 @@ export class AuditService {
             restartCount: 0,
           },
         },
-        { upsert: true, new: true },
+        { upsert: true, returnDocument: 'after' },
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -91,7 +91,7 @@ export class AuditService {
             incidentType,
           },
         },
-        { upsert: true, new: true },
+        { upsert: true, returnDocument: 'after' },
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -145,7 +145,7 @@ export class AuditService {
             processingTimeMs: processingTimeMs ?? undefined,
           },
         },
-        { new: true },
+        { returnDocument: 'after' },
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
