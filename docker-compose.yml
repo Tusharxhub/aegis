@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # 1. State Cache (Redis) — configured for BullMQ queue workloads
   aegis-redis:
@@ -26,7 +24,7 @@ services:
     container_name: aegis-mongodb
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "27018:27017"
     volumes:
       - mongo_data:/data/db
       - ./infrastructure/mongodb/init.js:/docker-entrypoint-initdb.d/init.js:ro
@@ -40,63 +38,42 @@ services:
 
   # 3. Kafka Event Backbone (KRaft mode — no Zookeeper)
   aegis-kafka:
-    image: bitnami/kafka:latest
+    image: apache/kafka:4.2.1
     container_name: aegis-kafka
     restart: unless-stopped
     ports:
       - "9092:9092"
-      - "9094:9094"
     environment:
-      - ALLOW_PLAINTEXT_LISTENER=yes
-      - KAFKA_ENABLE_KRAFT=yes
-      - KAFKA_CFG_NODE_ID=1
-      - KAFKA_CFG_PROCESS_ROLES=broker,controller
-      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@aegis-kafka:9093
-      - KAFKA_CFG_LISTENERS=INTERNAL://:9092,EXTERNAL://:9094,CONTROLLER://:9093
-      - KAFKA_CFG_ADVERTISED_LISTENERS=INTERNAL://aegis-kafka:9092,EXTERNAL://localhost:9092
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
-      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=INTERNAL
-      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
-      - KAFKA_CFG_NUM_PARTITIONS=3
-      - KAFKA_CFG_DEFAULT_REPLICATION_FACTOR=1
-      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=1
-      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
-      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=1
-      - KAFKA_CFG_MIN_INSYNC_REPLICAS=1
-      - KAFKA_CFG_ENABLE_IDEMPOTENCE=true
-      - KAFKA_CFG_LOG_DIRS=/bitnami/kafka/data
-      - KAFKA_CFG_LOG_RETENTION_HOURS=168
-      - KAFKA_CFG_LOG_SEGMENT_BYTES=1073741824
-      - KAFKA_CFG_MESSAGE_MAX_BYTES=10485760
-      - KAFKA_CFG_REPLICA_FETCH_MAX_BYTES=10485760
-    volumes:
-      - kafka_data:/bitnami/kafka
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@aegis-kafka:9093
+      - KAFKA_LISTENERS=INTERNAL://:19092,EXTERNAL://:9092,CONTROLLER://:9093
+      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://aegis-kafka:19092,EXTERNAL://localhost:9092
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_NUM_PARTITIONS=3
+      - KAFKA_DEFAULT_REPLICATION_FACTOR=1
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_MIN_INSYNC_REPLICAS=1
+      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
     networks:
       - aegis-network
     healthcheck:
-      test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9094", "--list"]
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null",
+        ]
       interval: 15s
       timeout: 10s
       retries: 5
       start_period: 30s
 
-  # 4. Kafka UI (optional, local operator console)
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: aegis-kafka-ui
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    environment:
-      - KAFKA_CLUSTERS_0_NAME=aegis-local
-      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=aegis-kafka:9092
-    depends_on:
-      - aegis-kafka
-    networks:
-      - aegis-network
-
-  # 5. AI Inference Engine (Python — SentenceTransformers + FAISS + Kafka)
+  # 4. AI Inference Engine (Python — SentenceTransformers + FAISS + Kafka)
   aegis-ai-engine:
     build:
       context: ./services/ai-engine
@@ -107,7 +84,7 @@ services:
       - PORT=8000
       - HOST=0.0.0.0
       - MONGODB_URI=mongodb://aegis-mongodb:27017/aegis
-      - KAFKA_BROKER=aegis-kafka:9092
+      - KAFKA_BROKER=aegis-kafka:19092
     volumes:
       - ai_model_store:/app/models
       - ai_vector_store:/app/vectorstore/storage
@@ -125,12 +102,12 @@ services:
       retries: 5
       start_period: 60s
 
-  # 6. SRE Orchestrator (NestJS)
+  # 5. SRE Orchestrator (NestJS)
   aegis-nestjs:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: aegis-nestjs
+    container_name: aegis-control-plane
     restart: unless-stopped
     ports:
       - "3001:3001"
@@ -138,7 +115,7 @@ services:
       - NODE_ENV=production
       - BACKEND_PORT=3001
       - REDIS_URL=redis://aegis-redis:6379
-      - KAFKA_BROKER=aegis-kafka:9092
+      - KAFKA_BROKER=aegis-kafka:19092
       - KAFKA_CLIENT_ID=aegis-orchestrator
       - KAFKA_GROUP_ID=aegis-backend-group
       - KAFKA_SSL=false
@@ -159,28 +136,10 @@ services:
     networks:
       - aegis-network
 
-  # 7. Intentional Demo Crash Service (Chaos Engineering)
-  demo-crash-service:
-    build:
-      context: ./services/demo-crash-service
-      dockerfile: Dockerfile
-    container_name: demo-crash-service
-    restart: unless-stopped
-    ports:
-      - "3002:3000"
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-    networks:
-      - aegis-network
-
 volumes:
   redis_data:
     driver: local
   mongo_data:
-    driver: local
-  kafka_data:
     driver: local
   ai_model_store:
     driver: local
