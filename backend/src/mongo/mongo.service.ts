@@ -4,7 +4,6 @@ import {
   OnModuleDestroy,
   Logger,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import mongoose, { Connection, Model } from 'mongoose';
 import {
   ServiceSchema,
@@ -15,6 +14,13 @@ import {
   EpisodeSchema,
   MetricsSnapshotSchema,
 } from './schemas/index.js';
+
+/**
+ * Maximum number of connection attempts before giving up.
+ * Each retry waits `RETRY_DELAY_MS` before the next attempt.
+ */
+const MAX_RETRIES = 10;
+const RETRY_DELAY_MS = 3_000;
 
 @Injectable()
 export class MongoService implements OnModuleInit, OnModuleDestroy {
@@ -30,26 +36,63 @@ export class MongoService implements OnModuleInit, OnModuleDestroy {
   public EpisodeModel!: Model<any>;
   public MetricsModel!: Model<any>;
 
-  constructor(private readonly configService: ConfigService) {}
-
   async onModuleInit(): Promise<void> {
     const mongoUri =
-      this.configService.get<string>('MONGO_URI') ??
-      'mongodb://aegis-mongo:27017/aegis';
+      process.env.MONGODB_URI ?? 'mongodb://localhost:27017/aegis';
 
     this.logger.log(
-      `🔌 Initializing Mongoose Connection to local MongoDB: ${mongoUri}`,
+      `🔌 Connecting to MongoDB at: ${mongoUri}`,
     );
 
-    try {
-      this.connection = await mongoose.createConnection(mongoUri).asPromise();
-      this.logger.log('✅ MongoDB connection established successfully.');
-      this.initializeSchemasAndModels();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(`❌ Failed to connect to MongoDB: ${message}`);
-      throw err;
+    await this.connectWithRetry(mongoUri);
+    this.initializeSchemasAndModels();
+  }
+
+  /**
+   * Attempt to connect to MongoDB with exponential-backoff retries.
+   * Logs each attempt clearly so operators can see connection progress.
+   */
+  private async connectWithRetry(uri: string): Promise<void> {
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        this.logger.log(
+          `⏳ MongoDB connection attempt ${attempt}/${MAX_RETRIES}...`,
+        );
+
+        this.connection = await mongoose
+          .createConnection(uri, {
+            serverSelectionTimeoutMS: 5_000,
+            connectTimeoutMS: 10_000,
+            socketTimeoutMS: 45_000,
+          })
+          .asPromise();
+
+        this.logger.log('✅ MongoDB connection established successfully.');
+        return;
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+
+        if (attempt === MAX_RETRIES) {
+          this.logger.error(
+            `❌ MongoDB connection failed after ${MAX_RETRIES} attempts: ${message}`,
+          );
+          throw new Error(
+            `MongoDB connection failed after ${MAX_RETRIES} attempts: ${message}`,
+          );
+        }
+
+        this.logger.warn(
+          `⚠️  MongoDB attempt ${attempt}/${MAX_RETRIES} failed: ${message}. ` +
+          `Retrying in ${RETRY_DELAY_MS / 1_000}s...`,
+        );
+
+        await this.sleep(RETRY_DELAY_MS);
+      }
     }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   async onModuleDestroy(): Promise<void> {
