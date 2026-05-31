@@ -20,18 +20,20 @@ services:
 
   # 2. Infrastructure Ledger (MongoDB)
   aegis-mongodb:
-    image: mongo:6.0
+    image: mongo:7
     container_name: aegis-mongodb
     restart: unless-stopped
     ports:
-      - "27018:27017"
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=aegis
     volumes:
-      - mongo_data:/data/db
+      - aegis_mongo_data:/data/db
       - ./infrastructure/mongodb/init.js:/docker-entrypoint-initdb.d/init.js:ro
     networks:
       - aegis-network
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -139,7 +141,7 @@ services:
 volumes:
   redis_data:
     driver: local
-  mongo_data:
+  aegis_mongo_data:
     driver: local
   ai_model_store:
     driver: local
