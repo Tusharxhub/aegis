@@ -110,7 +110,7 @@ services:
     container_name: aegis-control-plane
     restart: unless-stopped
     ports:
-      - "3001:3001"
+      - "3002:3001"
     environment:
       - NODE_ENV=production
       - BACKEND_PORT=3001
