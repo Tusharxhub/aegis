@@ -37,26 +37,24 @@ export class MongoService implements OnModuleInit, OnModuleDestroy {
   public MetricsModel!: Model<any>;
 
   async onModuleInit(): Promise<void> {
-    const mongoUri =
-      process.env.MONGODB_URI ?? 'mongodb://localhost:27017/aegis';
+    const mongoUri = process.env.MONGODB_URI;
 
-    this.logger.log(
-      `🔌 Connecting to MongoDB at: ${mongoUri}`,
-    );
+    if (!mongoUri) {
+      throw new Error(
+        'MONGODB_URI is not set. Ensure your .env file contains MONGODB_URI=mongodb://localhost:27017/aegis',
+      );
+    }
 
+    this.logger.log(`Connecting to MongoDB at: ${mongoUri}`);
     await this.connectWithRetry(mongoUri);
     this.initializeSchemasAndModels();
   }
 
-  /**
-   * Attempt to connect to MongoDB with exponential-backoff retries.
-   * Logs each attempt clearly so operators can see connection progress.
-   */
   private async connectWithRetry(uri: string): Promise<void> {
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
         this.logger.log(
-          `⏳ MongoDB connection attempt ${attempt}/${MAX_RETRIES}...`,
+          `Attempt ${attempt}/${MAX_RETRIES} — connecting to MongoDB...`,
         );
 
         this.connection = await mongoose
@@ -67,14 +65,14 @@ export class MongoService implements OnModuleInit, OnModuleDestroy {
           })
           .asPromise();
 
-        this.logger.log('✅ MongoDB connection established successfully.');
+        this.logger.log('MongoDB connection established successfully.');
         return;
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
 
         if (attempt === MAX_RETRIES) {
           this.logger.error(
-            `❌ MongoDB connection failed after ${MAX_RETRIES} attempts: ${message}`,
+            `MongoDB connection failed after ${MAX_RETRIES} attempts: ${message}`,
           );
           throw new Error(
             `MongoDB connection failed after ${MAX_RETRIES} attempts: ${message}`,
@@ -82,8 +80,7 @@ export class MongoService implements OnModuleInit, OnModuleDestroy {
         }
 
         this.logger.warn(
-          `⚠️  MongoDB attempt ${attempt}/${MAX_RETRIES} failed: ${message}. ` +
-          `Retrying in ${RETRY_DELAY_MS / 1_000}s...`,
+          `Attempt ${attempt}/${MAX_RETRIES} failed — ${message}. Retrying in ${RETRY_DELAY_MS / 1_000}s...`,
         );
 
         await this.sleep(RETRY_DELAY_MS);
