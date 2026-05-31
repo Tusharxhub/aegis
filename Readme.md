@@ -156,6 +156,10 @@ Create a `.env` file in the root directory to share the API Key across container
 AEGIS_INTERNAL_KEY="generate_a_secure_random_string_here"
 MONGO_URI="mongodb://aegis-mongo:27017/aegis"
 REDIS_URL="redis://aegis-redis:6379"
+KAFKA_BROKER="aegis-kafka:9092"
+KAFKA_CLIENT_ID="aegis-orchestrator"
+KAFKA_GROUP_ID="aegis-backend-group"
+KAFKA_SSL="false"
 
 ```
 

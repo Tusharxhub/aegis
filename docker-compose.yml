@@ -35,7 +35,51 @@ services:
       timeout: 5s
       retries: 5
 
-  # 3. Custom AI Inference Engine (Python Sentence-Transformers & FAISS)
+  # 3. Kafka Event Backbone (KRaft)
+  aegis-kafka:
+    image: bitnami/kafka:latest
+    container_name: aegis-kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+    environment:
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_ENABLE_KRAFT=yes
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@aegis-kafka:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://aegis-kafka:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_CFG_MIN_INSYNC_REPLICAS=1
+      - KAFKA_CFG_LOG_DIRS=/bitnami/kafka/data
+    volumes:
+      - kafka_data:/bitnami/kafka
+    networks:
+      - aegis-network
+
+  # 4. Kafka UI (optional, local operator console)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: aegis-kafka-ui
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=aegis-local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=aegis-kafka:9092
+    depends_on:
+      - aegis-kafka
+    networks:
+      - aegis-network
+
+  # 5. Custom AI Inference Engine (Python Sentence-Transformers & FAISS)
   aegis-ai-engine:
     build:
       context: ./services/ai-engine
@@ -72,6 +116,10 @@ services:
       - NODE_ENV=production
       - BACKEND_PORT=3001
       - REDIS_URL=redis://aegis-redis:6379
+      - KAFKA_BROKER=aegis-kafka:9092
+      - KAFKA_CLIENT_ID=aegis-orchestrator
+      - KAFKA_GROUP_ID=aegis-backend-group
+      - KAFKA_SSL=false
       - AI_ENGINE_URL=http://aegis-ai-engine:8000
       - MONGO_URI=mongodb://aegis-mongo:27017/aegis
       - DOCKER_SOCKET_PATH=/var/run/docker.sock
@@ -81,6 +129,8 @@ services:
     depends_on:
       aegis-redis:
         condition: service_healthy
+      aegis-kafka:
+        condition: service_started
       aegis-ai-engine:
         condition: service_healthy
       aegis-mongo:
@@ -126,6 +176,8 @@ volumes:
   redis_data:
     driver: local
   mongo_data:
+    driver: local
+  kafka_data:
     driver: local
   ai_model_store:
     driver: local

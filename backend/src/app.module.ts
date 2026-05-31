@@ -8,6 +8,7 @@ import { QueueModule } from './queue/queue.module.js';
 import { AiAgentModule } from './ai-agent/ai-agent.module.js';
 import { OrchestratorModule } from './orchestrator/orchestrator.module.js';
 import { GatewayModule } from './gateway/gateway.module.js';
+import { KafkaModule } from './kafka/kafka.module.js';
 
 /**
  * AppModule — Root module for Project Aegis.
@@ -35,6 +36,7 @@ import { GatewayModule } from './gateway/gateway.module.js';
 
     // Relational/Document Database Layer (MongoDB)
     MongoModule,
+    KafkaModule,
 
     // Core Domain modules
     DockerModule,

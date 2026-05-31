@@ -7,6 +7,7 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import Docker from 'dockerode';
 import { ConfigService } from '@nestjs/config';
+import { randomUUID } from 'crypto';
 import type {
   RawDockerEvent,
   DockerCrashEvent,
@@ -17,6 +18,8 @@ import {
   MAX_LOG_LINES,
   IGNORED_CONTAINERS,
 } from '../common/constants/index.js';
+import { KafkaProducerService } from '../kafka/kafka.producer.js';
+import { KAFKA_TOPICS } from '../kafka/kafka.constants.js';
 
 /**
  * DockerService — The Watcher.
@@ -42,6 +45,7 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly configService: ConfigService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly kafkaProducer: KafkaProducerService,
   ) {
     const socketPath =
       this.configService.get<string>('DOCKER_SOCKET_PATH') ??
@@ -194,6 +198,24 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
       logs,
       metadata: { ...raw.Actor.Attributes },
     };
+
+    void this.kafkaProducer.publish(KAFKA_TOPICS.CONTAINER_EVENTS, {
+      eventType: 'CONTAINER_LIFECYCLE',
+      source: 'watchman',
+      correlationId: raw.Actor.ID,
+      eventId: randomUUID(),
+      payload: {
+        eventId: randomUUID(),
+        serviceId: null,
+        containerId: crashEvent.containerId,
+        containerName: crashEvent.containerName,
+        imageName: crashEvent.imageName,
+        action: crashEvent.eventType,
+        exitCode: crashEvent.exitCode,
+        detectedAt: crashEvent.timestamp.toISOString(),
+        metadata: crashEvent.metadata,
+      },
+    });
 
     // Emit to the internal event bus (picked up by OrchestratorService)
     this.eventEmitter.emit('docker.crash', crashEvent);

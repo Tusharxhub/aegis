@@ -25,6 +25,9 @@ import {
   ActionType,
   RiskLevel,
 } from '../common/interfaces/db-types.js';
+import { KafkaProducerService } from '../kafka/kafka.producer.js';
+import { KAFKA_TOPICS } from '../kafka/kafka.constants.js';
+import { RemediationAction } from '../kafka/kafka.types.js';
 
 @Injectable()
 export class OrchestratorService implements OnModuleInit {
@@ -36,6 +39,7 @@ export class OrchestratorService implements OnModuleInit {
     private readonly dockerService: DockerService,
     private readonly queueService: QueueService,
     private readonly gateway: AegisGateway,
+    private readonly kafkaProducer: KafkaProducerService,
     private readonly aiAgent: AiAgentService,
     private readonly configService: ConfigService,
   ) {}
@@ -53,7 +57,25 @@ export class OrchestratorService implements OnModuleInit {
   async handleDailyTraining(): Promise<void> {
     this.logger.log('📅 Scheduled daily audit task triggered at 3:00 AM.');
     // In local CPU setup, logging metrics for training evaluation
-    await this.auditService.logMetrics(0.12, 0.45, 0.08);
+    const cpuUsage = 0.12;
+    const memoryUsage = 0.45;
+    const diskUsage = 0.08;
+
+    await this.auditService.logMetrics(cpuUsage, memoryUsage, diskUsage);
+
+    void this.kafkaProducer.publish(KAFKA_TOPICS.METRICS_SNAPSHOTS, {
+      eventType: 'METRICS_SNAPSHOT_RECORDED',
+      source: 'audit-service',
+      correlationId: 'daily-training-window',
+      payload: {
+        snapshotId: randomUUID(),
+        source: 'scheduler',
+        collectedAt: new Date().toISOString(),
+        cpuUsage,
+        memoryUsage,
+        diskUsage,
+      },
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -97,6 +119,67 @@ export class OrchestratorService implements OnModuleInit {
         event.logs,
         event.metadata,
       );
+
+      void this.kafkaProducer.publish(KAFKA_TOPICS.INCIDENT_DETECTED, {
+        eventType: 'INCIDENT_DETECTED',
+        source: 'incident-service',
+        correlationId: infraEvent.id.toString(),
+        eventId: randomUUID(),
+        payload: {
+          eventId: infraEvent.id.toString(),
+          serviceId: service.id?.toString?.() ?? null,
+          containerId: event.containerId,
+          containerName: event.containerName,
+          imageName: event.imageName,
+          eventType: (
+            eventTypeMap[event.eventType] ?? EventType.DIE
+          ).toString() as 'DIE' | 'OOM' | 'KILL',
+          exitCode: event.exitCode ?? 1,
+          detectedAt: infraEvent.timestamp.toISOString(),
+          logsPreview: event.logs.slice(0, 2_048),
+        },
+      });
+
+      void this.kafkaProducer.publish(KAFKA_TOPICS.LOGS_EXTRACTED, {
+        eventType: 'LOGS_EXTRACTED',
+        source: 'incident-service',
+        correlationId: infraEvent.id.toString(),
+        eventId: randomUUID(),
+        payload: {
+          eventId: randomUUID(),
+          serviceId: service.id?.toString?.() ?? null,
+          containerId: event.containerId,
+          containerName: event.containerName,
+          lineCount: event.logs
+            .split('\n')
+            .filter((line) => line.trim().length > 0).length,
+          extractedAt: new Date().toISOString(),
+          logs: event.logs,
+        },
+      });
+
+      void this.kafkaProducer.publish(KAFKA_TOPICS.AUDIT_EVENTS, {
+        eventType: 'AUDIT_EVENT_RECORDED',
+        source: 'audit-service',
+        correlationId: infraEvent.id.toString(),
+        eventId: randomUUID(),
+        payload: {
+          auditId: randomUUID(),
+          entityType: 'incident',
+          entityId: infraEvent.id.toString(),
+          action: 'incident.logged',
+          status: 'RECORDED',
+          summary: `Crash event captured for ${event.containerName}`,
+          recordedAt: new Date().toISOString(),
+          details: {
+            containerId: event.containerId,
+            containerName: event.containerName,
+            imageName: event.imageName,
+            eventType: event.eventType,
+            exitCode: event.exitCode,
+          },
+        },
+      });
 
       // 2. Broadcast incident.detected via WebSocket
       this.gateway.broadcast('incident.detected', {
@@ -168,6 +251,8 @@ export class OrchestratorService implements OnModuleInit {
         throw new Error('InfrastructureEvent record not found in MongoDB');
       }
 
+      const correlationId = dbEvent.id.toString();
+
       this.emitTerminalLog(
         'ai',
         'AI Engine',
@@ -203,6 +288,42 @@ export class OrchestratorService implements OnModuleInit {
         diagnosis.reasoning,
       );
 
+      const kafkaRiskLevel =
+        diagnosis.riskLevel === 'HIGH' ? RiskLevel.HIGH : RiskLevel.LOW;
+
+      const kafkaActionMap: Record<string, RemediationAction> = {
+        RESTART_CONTAINER: RemediationAction.RESTART_CONTAINER,
+        STOP_CONTAINER: RemediationAction.STOP_CONTAINER,
+        IGNORE: RemediationAction.IGNORE,
+      };
+
+      void this.kafkaProducer.publish(KAFKA_TOPICS.AI_DIAGNOSIS_COMPLETED, {
+        eventType: 'AI_DIAGNOSIS_COMPLETED',
+        source: 'ai-engine',
+        correlationId,
+        eventId: randomUUID(),
+        payload: {
+          eventId: correlationId,
+          planId: plan.id.toString(),
+          incidentType: diagnosis.incidentType,
+          analysis: diagnosis.analysis,
+          confidenceScore: diagnosis.confidenceScore,
+          riskLevel: kafkaRiskLevel,
+          suggestedAction:
+            kafkaActionMap[diagnosis.suggestedAction] ??
+            RemediationAction.IGNORE,
+          reasoning: diagnosis.reasoning,
+          similarIncidents: (diagnosis.similarIncidents ?? []).map(
+            (incident) => ({
+              incident_id: incident.incident_id,
+              label: incident.label,
+              score: incident.score,
+            }),
+          ),
+          completedAt: new Date().toISOString(),
+        },
+      });
+
       // 5. Broadcast ai.analysis.completed to frontend
       this.gateway.broadcast('ai.analysis.completed', {
         eventId: dbEvent.id,
@@ -210,7 +331,7 @@ export class OrchestratorService implements OnModuleInit {
         incidentType: diagnosis.incidentType,
         analysis: diagnosis.analysis,
         confidenceScore: diagnosis.confidenceScore,
-        riskLevel: diagnosis.riskLevel,
+        riskLevel: kafkaRiskLevel,
         suggestedAction: diagnosis.suggestedAction,
         reasoning: diagnosis.reasoning,
         similarIncidents: diagnosis.similarIncidents ?? [],
@@ -219,10 +340,33 @@ export class OrchestratorService implements OnModuleInit {
       // 6. Enforce SAFETY threshold checks
       let executionLogs = 'Action execution skipped.';
       let isSuccessful = false;
+      const executionId = randomUUID();
       const isSafetyPassed =
         diagnosis.confidenceScore > 0.85 &&
         diagnosis.riskLevel === 'LOW' &&
         diagnosis.suggestedAction !== 'IGNORE';
+      let skipReason = '';
+
+      void this.kafkaProducer.publish(KAFKA_TOPICS.REMEDIATION_STARTED, {
+        eventType: 'REMEDIATION_STARTED',
+        source: 'remediation-engine',
+        correlationId,
+        eventId: randomUUID(),
+        payload: {
+          eventId: correlationId,
+          planId: plan.id.toString(),
+          executionId,
+          containerId: event.containerId,
+          containerName: event.containerName,
+          action:
+            kafkaActionMap[diagnosis.suggestedAction] ??
+            RemediationAction.IGNORE,
+          startedAt: new Date().toISOString(),
+          safetyPassed: isSafetyPassed,
+          confidenceScore: diagnosis.confidenceScore,
+          riskLevel: kafkaRiskLevel,
+        },
+      });
 
       if (isSafetyPassed) {
         this.emitTerminalLog(
@@ -274,6 +418,27 @@ export class OrchestratorService implements OnModuleInit {
           Date.now() - startTime,
         );
 
+        void this.kafkaProducer.publish(KAFKA_TOPICS.REMEDIATION_COMPLETED, {
+          eventType: 'REMEDIATION_COMPLETED',
+          source: 'remediation-engine',
+          correlationId,
+          eventId: randomUUID(),
+          payload: {
+            eventId: correlationId,
+            planId: plan.id.toString(),
+            executionId,
+            containerId: event.containerId,
+            containerName: event.containerName,
+            action:
+              kafkaActionMap[diagnosis.suggestedAction] ??
+              RemediationAction.IGNORE,
+            success: isSuccessful,
+            logs: executionLogs,
+            durationMs: Date.now() - startTime,
+            completedAt: new Date().toISOString(),
+          },
+        });
+
         // Update container status in database
         await this.auditService.upsertService(
           event.containerId,
@@ -282,18 +447,18 @@ export class OrchestratorService implements OnModuleInit {
           isSuccessful ? ServiceStatus.HEALTHY : ServiceStatus.DEGRADED,
         );
       } else {
-        const reason =
+        skipReason =
           diagnosis.suggestedAction === 'IGNORE'
             ? 'Policy suggested IGNORE.'
             : `Confidence threshold (${diagnosis.confidenceScore.toFixed(2)}) inadequate or high risk level.`;
 
         this.logger.warn(
-          `⏭️ Skipped automatic self-healing. Reason: ${reason}`,
+          `⏭️ Skipped automatic self-healing. Reason: ${skipReason}`,
         );
         this.emitTerminalLog(
           'warn',
           'Safety Guard',
-          `⏭️ Remediation skipped: ${reason}`,
+          `⏭️ Remediation skipped: ${skipReason}`,
         );
 
         await this.auditService.updatePlanStatus(
@@ -302,6 +467,27 @@ export class OrchestratorService implements OnModuleInit {
           Date.now() - startTime,
         );
 
+        void this.kafkaProducer.publish(KAFKA_TOPICS.REMEDIATION_COMPLETED, {
+          eventType: 'REMEDIATION_COMPLETED',
+          source: 'remediation-engine',
+          correlationId,
+          eventId: randomUUID(),
+          payload: {
+            eventId: correlationId,
+            planId: plan.id.toString(),
+            executionId,
+            containerId: event.containerId,
+            containerName: event.containerName,
+            action:
+              kafkaActionMap[diagnosis.suggestedAction] ??
+              RemediationAction.IGNORE,
+            success: false,
+            logs: skipReason,
+            durationMs: Date.now() - startTime,
+            completedAt: new Date().toISOString(),
+          },
+        });
+
         await this.auditService.upsertService(
           event.containerId,
           event.containerName,
@@ -309,6 +495,31 @@ export class OrchestratorService implements OnModuleInit {
           ServiceStatus.DEGRADED,
         );
       }
+
+      void this.kafkaProducer.publish(KAFKA_TOPICS.AUDIT_EVENTS, {
+        eventType: isSuccessful ? 'REMEDIATION_SUCCESS' : 'REMEDIATION_SKIPPED',
+        source: 'audit-service',
+        correlationId,
+        eventId: randomUUID(),
+        payload: {
+          auditId: randomUUID(),
+          entityType: 'plan',
+          entityId: plan.id.toString(),
+          action: diagnosis.suggestedAction,
+          status: isSuccessful ? 'COMPLETED' : 'SKIPPED',
+          summary: isSuccessful
+            ? `Remediation completed successfully for ${event.containerName}`
+            : `Remediation skipped for ${event.containerName}`,
+          recordedAt: new Date().toISOString(),
+          details: {
+            containerId: event.containerId,
+            safetyPassed: isSafetyPassed,
+            confidenceScore: diagnosis.confidenceScore,
+            riskLevel: kafkaRiskLevel,
+            executionLogs,
+          },
+        },
+      });
 
       // 7. Emit remediation.completed to frontend
       this.gateway.broadcast('remediation.completed', {
