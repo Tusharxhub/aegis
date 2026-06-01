@@ -180,18 +180,27 @@ Python   ≥ 3.10
 ### Start the Full Stack
 
 ```bash
-docker compose up --build -d
+npm run dev:safe
+```
+*(This starts the infrastructure, waits for Kafka, and runs NestJS)*
+
+Or manually:
+```bash
+npm run infra:up
+npm run wait:kafka
+npm run start:dev
 ```
 
 > Spins up: MongoDB · Redis · Kafka · Kafka UI · NestJS backend · AI engine · Demo crash service
 
-### Development Mode
+### Debugging
 
+Useful commands if Kafka or other services fail:
 ```bash
-cd backend && npm run start:dev
+docker compose ps
+docker logs aegis-kafka --tail=80
+nc -zv localhost 9092
 ```
-
-> Runs the NestJS orchestrator locally while keeping all supporting services in Docker.
 
 ---
 

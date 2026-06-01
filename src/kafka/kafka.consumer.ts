@@ -16,9 +16,8 @@ export class KafkaConsumerService implements OnModuleInit, OnApplicationShutdown
 
   async onModuleInit(): Promise<void> {
     try { await this.start(); } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Kafka consumer initialization failed: ${message}`);
-      this.health.setError(message);
+      this.logger.warn(`[KAFKA] Consumers offline`);
+      this.health.setError('Kafka is unreachable. Start infrastructure with npm run infra:up.');
     }
   }
 
@@ -61,10 +60,8 @@ export class KafkaConsumerService implements OnModuleInit, OnApplicationShutdown
           this.health.setError(message);
         });
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.logger.error(`Kafka consumer group ${groupId} failed to start: ${message}`);
         this.health.markConsumerState(groupId, false, topics);
-        this.health.setError(message);
+        throw error;
       }
     });
 

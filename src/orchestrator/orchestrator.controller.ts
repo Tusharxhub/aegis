@@ -53,6 +53,25 @@ export class OrchestratorController {
    */
   @Get('health/kafka')
   getKafkaHealth() {
-    return { status: 'ok', kafka: this.kafkaProducer.getHealthSnapshot() };
+    const snapshot = this.kafkaProducer.getHealthSnapshot();
+    const consumersConnected = snapshot.consumerGroups.length > 0 && snapshot.consumerGroups.every(c => c.connected);
+    const isHealthy = snapshot.producerConnected && consumersConnected;
+
+    if (!isHealthy) {
+      return {
+        status: 'degraded',
+        broker: snapshot.broker.join(', '),
+        producerConnected: snapshot.producerConnected,
+        consumersConnected,
+        message: 'Kafka is unreachable. Start infrastructure with npm run infra:up.',
+      };
+    }
+
+    return {
+      status: 'healthy',
+      broker: snapshot.broker.join(', '),
+      producerConnected: snapshot.producerConnected,
+      consumersConnected,
+    };
   }
 }

@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
+import { KafkaHealthService } from './kafka/kafka.health.js';
 
 /**
  * Bootstrap — Aegis Control Plane
@@ -51,7 +52,16 @@ async function bootstrap(): Promise<void> {
   ].join('\n');
 
   logger.log(`\n${banner}`);
-  logger.log('[AEGIS] Control plane online');
+
+  const kafkaHealth = app.get(KafkaHealthService);
+  const snapshot = kafkaHealth.getSnapshot();
+  if (!snapshot.producerConnected) {
+    logger.warn(
+      '[AEGIS] Control plane online in DEGRADED mode: Kafka unavailable',
+    );
+  } else {
+    logger.log('[AEGIS] Control plane online');
+  }
 }
 
 bootstrap().catch((err: unknown) => {
