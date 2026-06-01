@@ -5,7 +5,7 @@
 
 /**
  * Raw Docker engine event as received from the dockerode event stream.
- * We only listen for `die` and `oom` events on containers.
+ * We listen for crash and health events on containers.
  */
 export interface RawDockerEvent {
   readonly Type: string;
@@ -32,7 +32,7 @@ export interface DockerCrashEvent {
   readonly containerName: string;
   readonly imageName: string;
   readonly exitCode: number;
-  readonly eventType: 'die' | 'oom' | 'kill';
+  readonly eventType: 'die' | 'oom' | 'kill' | 'health_status';
   readonly timestamp: Date;
   readonly logs: string;
   readonly metadata: Record<string, unknown>;

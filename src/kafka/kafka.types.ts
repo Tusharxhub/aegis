@@ -32,7 +32,14 @@ export interface ContainerEventPayload {
   readonly containerId: string;
   readonly containerName: string;
   readonly imageName: string;
-  readonly action: 'start' | 'die' | 'oom' | 'kill' | 'stop' | 'restart';
+  readonly action:
+    | 'start'
+    | 'die'
+    | 'oom'
+    | 'kill'
+    | 'health_status'
+    | 'stop'
+    | 'restart';
   readonly exitCode: number | null;
   readonly detectedAt: string;
   readonly metadata: Record<string, unknown>;
@@ -44,7 +51,7 @@ export interface IncidentDetectedPayload {
   readonly containerId: string;
   readonly containerName: string;
   readonly imageName: string;
-  readonly eventType: 'DIE' | 'OOM' | 'KILL';
+  readonly eventType: 'DIE' | 'OOM' | 'KILL' | 'HEALTH_CHECK_FAIL';
   readonly exitCode: number;
   readonly detectedAt: string;
   readonly logsPreview: string;
@@ -180,7 +187,12 @@ function normalizeAegisValue(value: unknown): unknown {
   if (value === undefined) return undefined;
   if (value === null) return null;
   if (typeof value === 'bigint') return value.toString();
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  )
+    return value;
   if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) {
     return value.map((entry) => {
@@ -206,51 +218,156 @@ export function serializeAegisEvent<TPayload extends Record<string, unknown>>(
 }
 
 export function isKafkaEventEnvelope(value: unknown): value is KafkaEventEnvelope {
-  return isRecord(value) && hasString(value, 'eventId') && hasString(value, 'eventType') && hasString(value, 'source') && hasString(value, 'timestamp') && hasString(value, 'correlationId') && isRecord(value.payload);
+  return (
+    isRecord(value) &&
+    hasString(value, 'eventId') &&
+    hasString(value, 'eventType') &&
+    hasString(value, 'source') &&
+    hasString(value, 'timestamp') &&
+    hasString(value, 'correlationId') &&
+    isRecord(value.payload)
+  );
 }
 
 export function isContainerEventPayload(value: unknown): value is ContainerEventPayload {
-  return isRecord(value) && hasString(value, 'eventId') && hasString(value, 'containerId') && hasString(value, 'containerName') && hasString(value, 'imageName') && hasString(value, 'action') && hasString(value, 'detectedAt') && (typeof value.exitCode === 'number' || value.exitCode === null) && isRecord(value.metadata);
+  return (
+    isRecord(value) &&
+    hasString(value, 'eventId') &&
+    hasString(value, 'containerId') &&
+    hasString(value, 'containerName') &&
+    hasString(value, 'imageName') &&
+    hasString(value, 'action') &&
+    hasString(value, 'detectedAt') &&
+    (typeof value.exitCode === 'number' || value.exitCode === null) &&
+    isRecord(value.metadata)
+  );
 }
 
 export function isIncidentDetectedPayload(value: unknown): value is IncidentDetectedPayload {
-  return isRecord(value) && hasString(value, 'eventId') && (typeof value.serviceId === 'string' || value.serviceId === null) && hasString(value, 'containerId') && hasString(value, 'containerName') && hasString(value, 'imageName') && hasString(value, 'eventType') && hasNumber(value, 'exitCode') && hasString(value, 'detectedAt') && hasString(value, 'logsPreview');
+  return (
+    isRecord(value) &&
+    hasString(value, 'eventId') &&
+    (typeof value.serviceId === 'string' || value.serviceId === null) &&
+    hasString(value, 'containerId') &&
+    hasString(value, 'containerName') &&
+    hasString(value, 'imageName') &&
+    hasString(value, 'eventType') &&
+    hasNumber(value, 'exitCode') &&
+    hasString(value, 'detectedAt') &&
+    hasString(value, 'logsPreview')
+  );
 }
 
 export function isLogsExtractedPayload(value: unknown): value is LogsExtractedPayload {
-  return isRecord(value) && hasString(value, 'eventId') && hasString(value, 'containerId') && hasString(value, 'containerName') && hasNumber(value, 'lineCount') && hasString(value, 'extractedAt') && hasString(value, 'logs');
+  return (
+    isRecord(value) &&
+    hasString(value, 'eventId') &&
+    hasString(value, 'containerId') &&
+    hasString(value, 'containerName') &&
+    hasNumber(value, 'lineCount') &&
+    hasString(value, 'extractedAt') &&
+    hasString(value, 'logs')
+  );
 }
 
 export function isAiDiagnosisCompletedPayload(value: unknown): value is AiDiagnosisCompletedPayload {
-  return isRecord(value) && hasString(value, 'eventId') && hasString(value, 'planId') && hasString(value, 'incidentType') && hasString(value, 'analysis') && hasNumber(value, 'confidenceScore') && hasString(value, 'riskLevel') && hasString(value, 'suggestedAction') && hasString(value, 'reasoning') && hasString(value, 'completedAt') && Array.isArray(value.similarIncidents);
+  return (
+    isRecord(value) &&
+    hasString(value, 'eventId') &&
+    hasString(value, 'planId') &&
+    hasString(value, 'incidentType') &&
+    hasString(value, 'analysis') &&
+    hasNumber(value, 'confidenceScore') &&
+    hasString(value, 'riskLevel') &&
+    hasString(value, 'suggestedAction') &&
+    hasString(value, 'reasoning') &&
+    hasString(value, 'completedAt') &&
+    Array.isArray(value.similarIncidents)
+  );
 }
 
 export function isRemediationStartedPayload(value: unknown): value is RemediationStartedPayload {
-  return isRecord(value) && hasString(value, 'eventId') && hasString(value, 'planId') && hasString(value, 'executionId') && hasString(value, 'containerId') && hasString(value, 'containerName') && hasString(value, 'action') && hasString(value, 'startedAt') && typeof value.safetyPassed === 'boolean' && hasNumber(value, 'confidenceScore') && hasString(value, 'riskLevel');
+  return (
+    isRecord(value) &&
+    hasString(value, 'eventId') &&
+    hasString(value, 'planId') &&
+    hasString(value, 'executionId') &&
+    hasString(value, 'containerId') &&
+    hasString(value, 'containerName') &&
+    hasString(value, 'action') &&
+    hasString(value, 'startedAt') &&
+    typeof value.safetyPassed === 'boolean' &&
+    hasNumber(value, 'confidenceScore') &&
+    hasString(value, 'riskLevel')
+  );
 }
 
 export function isRemediationCompletedPayload(value: unknown): value is RemediationCompletedPayload {
-  return isRecord(value) && hasString(value, 'eventId') && hasString(value, 'planId') && hasString(value, 'containerId') && hasString(value, 'containerName') && hasString(value, 'action') && typeof value.success === 'boolean' && hasString(value, 'logs') && hasNumber(value, 'durationMs') && hasString(value, 'completedAt');
+  return (
+    isRecord(value) &&
+    hasString(value, 'eventId') &&
+    hasString(value, 'planId') &&
+    hasString(value, 'containerId') &&
+    hasString(value, 'containerName') &&
+    hasString(value, 'action') &&
+    typeof value.success === 'boolean' &&
+    hasString(value, 'logs') &&
+    hasNumber(value, 'durationMs') &&
+    hasString(value, 'completedAt')
+  );
 }
 
 export function isRlFeedbackPayload(value: unknown): value is RlFeedbackPayload {
-  return isRecord(value) && hasString(value, 'feedbackId') && hasString(value, 'episodeId') && hasString(value, 'containerId') && hasString(value, 'containerName') && hasString(value, 'actionTaken') && hasNumber(value, 'reward') && typeof value.isHealthy === 'boolean' && hasNumber(value, 'stateVectorDim') && hasString(value, 'recordedAt');
+  return (
+    isRecord(value) &&
+    hasString(value, 'feedbackId') &&
+    hasString(value, 'episodeId') &&
+    hasString(value, 'containerId') &&
+    hasString(value, 'containerName') &&
+    hasString(value, 'actionTaken') &&
+    hasNumber(value, 'reward') &&
+    typeof value.isHealthy === 'boolean' &&
+    hasNumber(value, 'stateVectorDim') &&
+    hasString(value, 'recordedAt')
+  );
 }
 
 export function isAuditEventPayload(value: unknown): value is AuditEventPayload {
-  return isRecord(value) && hasString(value, 'auditId') && hasString(value, 'entityType') && hasString(value, 'entityId') && hasString(value, 'action') && hasString(value, 'status') && hasString(value, 'summary') && hasString(value, 'recordedAt') && isRecord(value.details);
+  return (
+    isRecord(value) &&
+    hasString(value, 'auditId') &&
+    hasString(value, 'entityType') &&
+    hasString(value, 'entityId') &&
+    hasString(value, 'action') &&
+    hasString(value, 'status') &&
+    hasString(value, 'summary') &&
+    hasString(value, 'recordedAt') &&
+    isRecord(value.details)
+  );
 }
 
-export function isTopicPayload<TTopic extends KafkaTopic>(topic: TTopic, payload: unknown): payload is KafkaPayloadForTopic<TTopic> {
+export function isTopicPayload<TTopic extends KafkaTopic>(
+  topic: TTopic,
+  payload: unknown,
+): payload is KafkaPayloadForTopic<TTopic> {
   switch (topic) {
-    case KAFKA_TOPICS.CONTAINER_EVENTS: return isContainerEventPayload(payload);
-    case KAFKA_TOPICS.INCIDENT_DETECTED: return isIncidentDetectedPayload(payload);
-    case KAFKA_TOPICS.LOGS_EXTRACTED: return isLogsExtractedPayload(payload);
-    case KAFKA_TOPICS.AI_DIAGNOSIS_COMPLETED: return isAiDiagnosisCompletedPayload(payload);
-    case KAFKA_TOPICS.REMEDIATION_STARTED: return isRemediationStartedPayload(payload);
-    case KAFKA_TOPICS.REMEDIATION_COMPLETED: return isRemediationCompletedPayload(payload);
-    case KAFKA_TOPICS.AUDIT_EVENTS: return isAuditEventPayload(payload);
-    case KAFKA_TOPICS.RL_FEEDBACK: return isRlFeedbackPayload(payload);
-    default: return false;
+    case KAFKA_TOPICS.CONTAINER_EVENTS:
+      return isContainerEventPayload(payload);
+    case KAFKA_TOPICS.INCIDENT_DETECTED:
+      return isIncidentDetectedPayload(payload);
+    case KAFKA_TOPICS.LOGS_EXTRACTED:
+      return isLogsExtractedPayload(payload);
+    case KAFKA_TOPICS.AI_DIAGNOSIS_COMPLETED:
+      return isAiDiagnosisCompletedPayload(payload);
+    case KAFKA_TOPICS.REMEDIATION_STARTED:
+      return isRemediationStartedPayload(payload);
+    case KAFKA_TOPICS.REMEDIATION_COMPLETED:
+      return isRemediationCompletedPayload(payload);
+    case KAFKA_TOPICS.AUDIT_EVENTS:
+      return isAuditEventPayload(payload);
+    case KAFKA_TOPICS.RL_FEEDBACK:
+      return isRlFeedbackPayload(payload);
+    default:
+      return false;
   }
 }

@@ -94,9 +94,9 @@ export class MongoService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     if (this.connection) {
-      this.logger.log('🔌 Disconnecting Mongoose from MongoDB...');
+      this.logger.log('Disconnecting Mongoose from MongoDB...');
       await this.connection.close();
-      this.logger.log('✅ MongoDB disconnected.');
+      this.logger.log('MongoDB disconnected.');
     }
   }
 
@@ -124,6 +124,6 @@ export class MongoService implements OnModuleInit, OnModuleDestroy {
       MetricsSnapshotSchema,
     );
 
-    this.logger.log('✅ Mongoose schemas compiled and models initialized.');
+    this.logger.log('Mongoose schemas compiled and models initialized.');
   }
 }

@@ -32,19 +32,22 @@ async function bootstrap(): Promise<void> {
   // Graceful shutdown — allows Kafka consumers and Mongo to disconnect cleanly
   app.enableShutdownHooks();
 
-  const port = parseInt(process.env.PORT ?? '4000', 10);
+  const port = parseInt(
+    process.env.BACKEND_PORT ?? process.env.PORT ?? '3001',
+    10,
+  );
   await app.listen(port, '0.0.0.0');
 
   const banner = [
-    '╔══════════════════════════════════════════════════════════════╗',
-    '║                                                              ║',
-    '║   🛡️  PROJECT AEGIS — Kafka-Native AIOps Control Plane       ║',
-    '║                                                              ║',
-    `║   Control Plane:  http://0.0.0.0:${port}                      ║`,
+    '╔════════════════════════════════════════════════════════════════════════╗',
+    '║                                                                        ║',
+    '║     PROJECT AEGIS — Kafka-Native AIOps Control Plane                   ║',
+    '║                                                                        ║',
+    `║   Control Plane:  http://0.0.0.0:${port}                               ║`,
     `║   Environment:    ${(process.env.NODE_ENV ?? 'development').padEnd(30)}║`,
-    '║   Mode:           headless backend (no frontend)             ║',
-    '║                                                              ║',
-    '╚══════════════════════════════════════════════════════════════╝',
+    '║   Mode:           headless backend (no frontend)                       ║',
+    '║                                                                        ║',
+    '╚════════════════════════════════════════════════════════════════════════╝',
   ].join('\n');
 
   logger.log(`\n${banner}`);

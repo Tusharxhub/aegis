@@ -56,7 +56,7 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     this.logger.log(
-      '🛡️  Aegis Watcher initializing — connecting to Docker socket...',
+      'Aegis Watcher initializing — connecting to Docker socket...',
     );
     await this.connectAndListen();
   }
@@ -76,7 +76,7 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
       this.eventStream = null;
     }
 
-    this.logger.log('🛑 Docker watcher shut down gracefully.');
+    this.logger.log('Docker watcher shut down gracefully.');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
     try {
       // Verify Docker daemon is reachable
       await this.docker.ping();
-      this.logger.log('✅ Docker daemon is reachable.');
+      this.logger.log('Docker daemon is reachable.');
 
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer);
@@ -97,7 +97,7 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
       const stream = await this.docker.getEvents({
         filters: {
           type: ['container'],
-          event: ['die', 'oom', 'kill'],
+          event: ['die', 'oom', 'kill', 'health_status'],
         },
       });
 
@@ -105,7 +105,7 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
       this.reconnectAttempts = 0;
 
       this.logger.log(
-        '📡 Aegis is now actively monitoring infrastructure events.',
+        'Aegis is now actively monitoring infrastructure events.',
       );
 
       stream.on('data', (chunk: Buffer) => {
@@ -162,7 +162,7 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
     const delay = exponentialDelay + jitter;
 
     this.logger.warn(
-      `🔄 Reconnecting to Docker socket in ${Math.round(delay / 1000)}s (attempt ${this.reconnectAttempts}/${DOCKER_MAX_RECONNECT_ATTEMPTS})...`,
+      `Reconnecting to Docker socket in ${Math.round(delay / 1000)}s (attempt ${this.reconnectAttempts}/${DOCKER_MAX_RECONNECT_ATTEMPTS})...`,
     );
 
     this.reconnectTimer = setTimeout(() => {
@@ -186,16 +186,24 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const eventType = raw.Action as 'die' | 'oom' | 'kill';
-    const exitCode = parseInt(raw.Actor.Attributes.exitCode ?? '1', 10);
+    const eventType = raw.Action.startsWith('health_status')
+      ? 'health_status'
+      : (raw.Action as 'die' | 'oom' | 'kill');
+    const exitCode = parseInt(raw.Actor.Attributes.exitCode ?? '0', 10);
 
-    this.logger.warn(
-      `🚨 CRITICAL: Container [${containerName}] — event: ${eventType}, exit code: ${exitCode}`,
-    );
+    if (eventType === 'health_status') {
+      this.logger.warn(
+        `Container [${containerName}] health transition detected: ${raw.Action}`,
+      );
+    } else {
+      this.logger.warn(
+        `CRITICAL: Container [${containerName}] — event: ${eventType}, exit code: ${exitCode}`,
+      );
+    }
 
     // Extract crash logs from the dead container
     const logs = await this.getContainerLogs(raw.Actor.ID);
-    this.logger.error(`📄 Extracted ${logs.length} chars of crash logs.`);
+    this.logger.error(`Extracted ${logs.length} chars of crash logs.`);
 
     const crashEvent: DockerCrashEvent = {
       containerId: raw.Actor.ID,
@@ -256,7 +264,7 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
       const message =
         error instanceof Error ? error.message : 'Unknown log extraction error';
       this.logger.warn(
-        `⚠️  Failed to extract logs for ${containerId}: ${message}`,
+        `  Failed to extract logs for ${containerId}: ${message}`,
       );
       return `[LOG_EXTRACTION_FAILED] ${message}`;
     }

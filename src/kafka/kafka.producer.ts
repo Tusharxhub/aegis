@@ -69,12 +69,11 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
 
     this.kafka ??= this.buildKafka();
     this.producer ??= this.kafka.producer({
-      createPartitioner: Partitioners.LegacyPartitioner,
       idempotent: true,
-      maxInFlightRequests: this.kafkaConfig.getProducerMaxInFlightRequests(),
-      allowAutoTopicCreation: true,
+      maxInFlightRequests: 1,
+      createPartitioner: Partitioners.LegacyPartitioner,
       retry: {
-        retries: this.kafkaConfig.getProducerRetryLimit(),
+        retries: Number.MAX_SAFE_INTEGER,
       },
     });
 
@@ -154,9 +153,9 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
             value: serializeAegisEvent(envelope),
             timestamp: messageTimestamp,
             headers: {
-              eventType: envelope.eventType,
-              correlationId: envelope.correlationId,
-              source: envelope.source,
+              eventType: String(envelope.eventType),
+              source: String(envelope.source),
+              correlationId: String(envelope.correlationId),
               timestamp: messageTimestamp,
             },
           },

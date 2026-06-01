@@ -47,6 +47,10 @@ export class OrchestratorService implements OnModuleInit {
   async handleCrashEvent(event: DockerCrashEvent): Promise<void> {
     const correlationId = randomUUID();
     const startTime = Date.now();
+    const normalizedEventType: EventType =
+      event.eventType === 'health_status'
+        ? EventType.HEALTH_CHECK_FAIL
+        : (event.eventType.toUpperCase() as EventType);
 
     this.logger.log(
       `[${correlationId}] Processing crash event for [${event.containerName}] (${event.eventType}, exit: ${event.exitCode})`,
@@ -67,7 +71,7 @@ export class OrchestratorService implements OnModuleInit {
       // Step 2: Log the crash event in the audit ledger
       const eventRecord = await this.auditService.logCrashEvent(
         serviceId ?? event.containerId,
-        event.eventType.toUpperCase() as EventType,
+        normalizedEventType,
         event.exitCode,
         event.logs,
         event.metadata,
@@ -86,7 +90,7 @@ export class OrchestratorService implements OnModuleInit {
           containerId: event.containerId,
           containerName: event.containerName,
           imageName: event.imageName,
-          eventType: event.eventType.toUpperCase() as 'DIE' | 'OOM' | 'KILL',
+          eventType: normalizedEventType,
           exitCode: event.exitCode,
           detectedAt: event.timestamp.toISOString(),
           logsPreview: event.logs.slice(0, 500),

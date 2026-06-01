@@ -1,0 +1,8 @@
+{
+  "name": "aegis-cli",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "ts-node --esm --project ../tsconfig.json ./src/index.ts"
+  }
+}

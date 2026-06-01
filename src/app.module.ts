@@ -1,17 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { ThrottlerModule } from '@nestjs/throttler';
 import { MongoModule } from './mongo/mongo.module.js';
 import { DockerModule } from './docker/docker.module.js';
 import { AiAgentModule } from './ai-agent/ai-agent.module.js';
 import { OrchestratorModule } from './orchestrator/orchestrator.module.js';
 import { KafkaModule } from './kafka/kafka.module.js';
 import { HealthModule } from './health/health.module.js';
-import {
-  getEnvFilePaths,
-  validateEnvironmentVariables,
-} from './common/config/environment.js';
+import { validateEnvironmentVariables } from './common/config/environment.js';
 
 /**
  * AppModule — Root module for Project Aegis.
@@ -24,7 +20,7 @@ import {
     // Global environment configuration
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env', ...getEnvFilePaths()],
+      envFilePath: ['.env'],
       validate: validateEnvironmentVariables,
     }),
 
@@ -35,14 +31,6 @@ import {
       maxListeners: 20,
       verboseMemoryLeak: true,
     }),
-
-    // Rate limiting for security
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000,
-        limit: 100,
-      },
-    ]),
 
     // Core infrastructure
     MongoModule,

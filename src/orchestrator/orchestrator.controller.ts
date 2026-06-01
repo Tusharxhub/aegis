@@ -51,7 +51,7 @@ export class OrchestratorController {
   /**
    * Get Kafka health snapshot.
    */
-  @Get('kafka/health')
+  @Get('health/kafka')
   getKafkaHealth() {
     return { status: 'ok', kafka: this.kafkaProducer.getHealthSnapshot() };
   }
