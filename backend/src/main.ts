@@ -35,15 +35,15 @@ async function bootstrap(): Promise<void> {
   await app.listen(port, '0.0.0.0');
 
   const banner = [
-    '╔══════════════════════════════════════════════════════════════╗',
-    '║                                                              ║',
-    '║   🛡️  PROJECT AEGIS — Kafka-Native AIOps Control Plane       ║',
-    '║                                                              ║',
-    `║   Control Plane:  http://0.0.0.0:${port}                      ║`,
+    '╔════════════════════════════════════════════════════════════════════════╗',
+    '║                                                                        ║',
+    '║     PROJECT AEGIS — Kafka-Native AIOps Control Plane                   ║',
+    '║                                                                        ║',
+    `║   Control Plane:  http://0.0.0.0:${port}                               ║`,
     `║   Environment:    ${(process.env.NODE_ENV ?? 'development').padEnd(30)}║`,
-    '║   Mode:           headless backend (no frontend)             ║',
-    '║                                                              ║',
-    '╚══════════════════════════════════════════════════════════════╝',
+    '║   Mode:           headless cli                                         ║',
+    '║                                                                        ║',
+    '╚════════════════════════════════════════════════════════════════════════╝',
   ].join('\n');
 
   logger.log(`\n${banner}`);
