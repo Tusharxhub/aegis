@@ -37,7 +37,7 @@ export class MongoService implements OnModuleInit, OnModuleDestroy {
   public MetricsModel!: Model<any>;
 
   async onModuleInit(): Promise<void> {
-    const mongoUri = process.env.MONGODB_URI;
+    const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
 
     if (!mongoUri) {
       throw new Error(
@@ -45,7 +45,7 @@ export class MongoService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    this.logger.log(`Connecting to MongoDB at: ${mongoUri}`);
+    this.logger.log('Connecting to MongoDB using configured URI.');
     await this.connectWithRetry(mongoUri);
     this.initializeSchemasAndModels();
   }

@@ -8,6 +8,10 @@ import { AiAgentModule } from './ai-agent/ai-agent.module.js';
 import { OrchestratorModule } from './orchestrator/orchestrator.module.js';
 import { KafkaModule } from './kafka/kafka.module.js';
 import { HealthModule } from './health/health.module.js';
+import {
+  getEnvFilePaths,
+  validateEnvironmentVariables,
+} from './common/config/environment.js';
 
 /**
  * AppModule — Root module for Project Aegis.
@@ -20,7 +24,8 @@ import { HealthModule } from './health/health.module.js';
     // Global environment configuration
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: ['.env', ...getEnvFilePaths()],
+      validate: validateEnvironmentVariables,
     }),
 
     // Internal decoupled event bus
