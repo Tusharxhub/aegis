@@ -4,7 +4,7 @@ services:
     container_name: aegis-mongodb
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "27018:27018"
     environment:
       MONGO_INITDB_DATABASE: aegis
     volumes:
@@ -76,7 +76,7 @@ services:
     environment:
       PORT: 8000
       HOST: 0.0.0.0
-      MONGODB_URI: mongodb://aegis-mongodb:27017/aegis
+      MONGODB_URI: mongodb://aegis-mongodb:27018/aegis
       KAFKA_BROKER: aegis-kafka:19092
     volumes:
       - ai_model_store:/app/models

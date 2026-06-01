@@ -210,7 +210,7 @@ nc -zv localhost 9092
 |---|---|
 | 🖥️ Backend API | `http://localhost:3001` |
 | 📊 Kafka UI | `http://localhost:8080` |
-| 🗄️ MongoDB | `localhost:27017` |
+| 🗄️ MongoDB | `localhost:27018` |
 | ⚡ Redis | `localhost:6379` |
 | 📨 Kafka Broker | `localhost:9092` |
 | 🤖 AI Engine | `http://localhost:8000` |

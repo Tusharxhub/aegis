@@ -23,7 +23,7 @@ app = FastAPI(
 )
 
 # Global variables
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://aegis-mongo:27017/aegis")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://aegis-mongo:27018/aegis")
 MODEL_PATH = os.getenv("MODEL_PATH", "/app/models/ppo_aegis_model")
 _model: Optional[PPO] = None
 

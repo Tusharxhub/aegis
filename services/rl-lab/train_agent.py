@@ -16,7 +16,7 @@ Usage:
     python train_agent.py --steps 50000 --output /app/models/ppo_aegis
 
 Environment variables:
-    MONGO_URI     — MongoDB connection string (default: mongodb://aegis-mongo:27017/aegis)
+    MONGO_URI     — MongoDB connection string (default: mongodb://aegis-mongo:27018/aegis)
     MODEL_OUTPUT  — Path to save trained model (default: ./models/ppo_aegis_v{timestamp})
 
 Dependencies:
@@ -57,7 +57,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--mongo-uri",
         type=str,
-        default=os.getenv("MONGO_URI", "mongodb://aegis-mongo:27017/aegis"),
+        default=os.getenv("MONGO_URI", "mongodb://aegis-mongo:27018/aegis"),
         help="MongoDB connection URI",
     )
     parser.add_argument(

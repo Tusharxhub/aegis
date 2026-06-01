@@ -38,7 +38,7 @@ def seed_db_if_empty(mongo_uri):
 
 def main():
     # Get MONGO_URI
-    mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/aegis")
+    mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27018/aegis")
     
     # Seed if empty to avoid RuntimeError
     seed_db_if_empty(mongo_uri)

@@ -14,7 +14,7 @@ class AegisOfflineEnv(gym.Env):
         
         # Read MONGO_URI from env or use fallback
         if mongo_uri is None:
-            mongo_uri = os.getenv("MONGO_URI", "mongodb://aegis-mongo:27017/aegis")
+            mongo_uri = os.getenv("MONGO_URI", "mongodb://aegis-mongo:27018/aegis")
         
         print(f"Connecting to MongoDB at: {mongo_uri}")
         self.client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)

@@ -12,7 +12,7 @@ Design decisions:
   - Single-step episodic MDP: each reset draws a random episode, step terminates
 
 Usage:
-    env = AegisOfflineEnv(mongo_uri="mongodb://localhost:27017/aegis")
+    env = AegisOfflineEnv(mongo_uri="mongodb://localhost:27018/aegis")
     obs, _ = env.reset()
     obs, reward, terminated, truncated, info = env.step(action)
 
@@ -71,7 +71,7 @@ class AegisOfflineEnv(gym.Env):
     ) -> None:
         super().__init__()
 
-        uri = mongo_uri or os.getenv("MONGO_URI", "mongodb://aegis-mongo:27017/aegis")
+        uri = mongo_uri or os.getenv("MONGO_URI", "mongodb://aegis-mongo:27018/aegis")
 
         self.episodes: list[dict] = []
         self.state_dim = STATE_DIM
