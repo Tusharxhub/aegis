@@ -1,17 +1,9 @@
 # dependencies
 node_modules/
-backend/node_modules/
-frontend/node_modules/
-frontend/
 
 # build outputs
 dist/
 build/
-backend/dist/
-backend/build/
-frontend/.next/
-frontend/out/
-frontend/build/
 
 # logs and local files
 *.log
@@ -19,13 +11,26 @@ frontend/build/
 .env.*
 .DS_Store
 coverage/
-frontend/coverage/
-backend/coverage/
 
 # editor and tool state
 .vscode/
 .idea/
 
+# legacy folders (DO NOT USE)
+backend/
+apps/
+frontend/
+
 # local Python environments
+services/rl-lab/.venv*/
+services/ai-engine/__pycache__/
+services/rl-lab/__pycache__/
+*.pyc
+
+# virtualenvs for rl-agent
+rl-agent/.venv/
 rl-agent/.venv3.11/
 
+# AI model artifacts (local only)
+services/ai-engine/models/
+services/rl-lab/models/

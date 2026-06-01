@@ -1,9 +1,24 @@
-# ──────────────────────────────────────────────────────────────
-# Project Aegis — Docker Compose (Kafka-native, no Redis)
-# ──────────────────────────────────────────────────────────────
-
 services:
-  # 1. Infrastructure Ledger (MongoDB)
+  # 1. State Cache (Redis) — configured for BullMQ queue workloads
+  aegis-redis:
+    image: redis:7.0-alpine
+    container_name: aegis-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./infrastructure/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf --maxmemory-policy noeviction
+    networks:
+      - aegis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # 2. Infrastructure Ledger (MongoDB)
   aegis-mongodb:
     image: mongo:7
     container_name: aegis-mongodb
@@ -23,7 +38,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # 2. Kafka Event Backbone (KRaft mode — no Zookeeper)
+  # 3. Kafka Event Backbone (KRaft mode — no Zookeeper)
   aegis-kafka:
     image: apache/kafka:4.2.1
     container_name: aegis-kafka
@@ -60,7 +75,7 @@ services:
       retries: 5
       start_period: 30s
 
-  # 3. AI Inference Engine (Python — SentenceTransformers + FAISS + Kafka)
+  # 4. AI Inference Engine (Python — SentenceTransformers + FAISS + Kafka)
   aegis-ai-engine:
     build:
       context: ./services/ai-engine
@@ -89,30 +104,33 @@ services:
       retries: 5
       start_period: 60s
 
-  # 4. Control Plane (NestJS Orchestrator)
-  aegis-control-plane:
+  # 5. SRE Orchestrator (NestJS)
+  aegis-nestjs:
     build:
-      context: .
+      context: ./apps/control-plane
       dockerfile: Dockerfile
     container_name: aegis-control-plane
     restart: unless-stopped
     ports:
-      - "4000:4000"
+      - "3002:3001"
     environment:
       - NODE_ENV=production
-      - PORT=4000
+      - BACKEND_PORT=3001
+      - REDIS_URL=redis://aegis-redis:6379
       - KAFKA_BROKER=aegis-kafka:19092
       - KAFKA_CLIENT_ID=aegis-orchestrator
+      - KAFKA_GROUP_ID=aegis-backend-group
       - KAFKA_SSL=false
       - AI_ENGINE_URL=http://aegis-ai-engine:8000
       - MONGODB_URI=mongodb://aegis-mongodb:27017/aegis
       - DOCKER_SOCKET_PATH=/var/run/docker.sock
-      - AEGIS_INTERNAL_TOKEN=${AEGIS_INTERNAL_TOKEN:-aegis-dev-token-change-in-production}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
-      aegis-kafka:
+      aegis-redis:
         condition: service_healthy
+      aegis-kafka:
+        condition: service_started
       aegis-ai-engine:
         condition: service_healthy
       aegis-mongodb:
@@ -120,23 +138,9 @@ services:
     networks:
       - aegis-network
 
-  # 5. Chaos Engineering Demo Service
-  aegis-demo-crash:
-    build:
-      context: ./services/demo-crash-service
-      dockerfile: Dockerfile
-    container_name: aegis-demo-crash
-    restart: unless-stopped
-    ports:
-      - "3099:3000"
-    networks:
-      - aegis-network
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-
 volumes:
+  redis_data:
+    driver: local
   aegis_mongo_data:
     driver: local
   ai_model_store:
