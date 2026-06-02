@@ -87,7 +87,7 @@ def generate_log(incident_type):
         "container_id": f"aegis-worker-{random.randint(100,999)}",
         "other_id": f"aegis-other-{random.randint(100,999)}",
         "host": random.choice(["aegis-postgres", "aegis-mongo", "127.0.0.1", "10.0.0.5"]),
-        "port": random.choice([3000, 3001, 5432, 27018, 6379, 8080, 8000]),
+        "port": random.choice([3000, 3001, 5432, 27017, 6379, 8080, 8000]),
         "user": random.choice(["root", "aegis_admin", "postgres", "node_runner"]),
         "timeout": random.choice([5000, 10000, 30000]),
         "ip": random.choice(["127.0.0.1", "172.18.0.3", "10.0.5.2"]),

@@ -41,7 +41,7 @@ export class MongoService implements OnModuleInit, OnModuleDestroy {
 
     if (!mongoUri) {
       throw new Error(
-        'MONGODB_URI is not set. Ensure your .env file contains MONGODB_URI=mongodb://localhost:27018/aegis',
+        'MONGODB_URI is not set. Ensure your .env file contains MONGODB_URI=mongodb://localhost:27017/aegis',
       );
     }
 

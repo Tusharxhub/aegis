@@ -56,7 +56,7 @@ class ReplayMemory:
         state_dim: int = 386,
     ) -> None:
         self._mongo_uri = mongo_uri or os.getenv(
-            "MONGO_URI", "mongodb://aegis-mongo:27018/aegis"
+            "MONGO_URI", "mongodb://aegis-mongo:27017/aegis"
         )
         self._collection_name = collection_name
         self._limit = limit

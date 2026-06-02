@@ -44,7 +44,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--mongo-uri",
         type=str,
-        default=os.getenv("MONGO_URI", "mongodb://aegis-mongo:27018/aegis"),
+        default=os.getenv("MONGO_URI", "mongodb://aegis-mongo:27017/aegis"),
         help="MongoDB connection URI",
     )
     parser.add_argument(
