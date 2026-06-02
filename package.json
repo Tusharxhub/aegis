@@ -6,13 +6,15 @@
   "private": true,
   "license": "UNLICENSED",
   "bin": {
-    "aegis": "./cli/aegis.mjs"
+    "aegis": "./dist/cli/index.js"
   },
   "scripts": {
-    "aegis": "node ./cli/aegis.mjs",
+    "aegis": "node ./dist/cli/index.js",
     "dev": "npm run start:dev",
     "start:dev": "nest start --watch",
-    "cli": "ts-node --esm --project tsconfig.json ./cli/src/index.ts",
+    "cli": "node dist/cli/index.js",
+    "build:cli": "tsc -p cli/tsconfig.json",
+    "link:cli": "npm run build:cli && sudo npm link",
     "dev:infra": "docker compose up --build -d",
     "dev:nest": "nest start --watch",
     "dev:ai": "cd services/ai-engine && python3 main.py",
