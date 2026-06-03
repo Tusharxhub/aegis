@@ -53,5 +53,5 @@ app.get('/crash/port', (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`🚀 Chaos Engineering Crash Target listening on port ${port}`);
+  console.log(` Chaos Engineering Crash Target listening on port ${port}`);
 });

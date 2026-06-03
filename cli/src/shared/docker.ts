@@ -16,6 +16,7 @@ export interface ContainerState {
   restarting: boolean;
   oomKilled: boolean;
   error: string;
+  startedAt: string;
 }
 
 /**
@@ -51,7 +52,24 @@ export function inspectContainer(containerName: string): ContainerState | null {
       restarting: Boolean(state.Restarting),
       oomKilled: Boolean(state.OOMKilled),
       error: String(state.Error ?? ''),
+      startedAt: String(state.StartedAt ?? ''),
     };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get a container's StartedAt timestamp.
+ * Returns null if the container does not exist.
+ */
+export function getContainerStartedAt(containerName: string): string | null {
+  try {
+    const raw = execSync(
+      `docker inspect --format '{{.State.StartedAt}}' ${containerName}`,
+      { stdio: 'pipe', timeout: 5000, encoding: 'utf8' },
+    );
+    return raw.trim() || null;
   } catch {
     return null;
   }
@@ -86,10 +104,5 @@ export function printContainerVerification(containerName: string): void {
 
   if (state.error) {
     log.verify(`Error: ${state.error}`);
-  }
-
-  if (state.running && !state.restarting) {
-    log.blank();
-    log.chaos('Target service is still running. The endpoint may not be producing a real OOM crash.');
   }
 }
