@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Default confidence threshold for auto-remediation. */
-export const DEFAULT_CONFIDENCE_THRESHOLD = 0.8;
+export const DEFAULT_CONFIDENCE_THRESHOLD = 0.85;
 
 /** Maximum log lines to extract from a crashed container. */
 export const MAX_LOG_LINES = 100;

@@ -4,7 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { DockerCrashEvent } from './docker-event.interface.js';
-import type { AiRemediationResponse } from './ai-response.interface.js';
+import type { AiDiagnosisResult } from './ai-response.interface.js';
 import type { KafkaEventEnvelope } from '../../kafka/kafka.types.js';
 
 /**
@@ -43,7 +43,7 @@ export interface OperationalAiStreamChunk {
 export interface OperationalAiAnalysisComplete {
   readonly eventId: string;
   readonly planId: string;
-  readonly result: AiRemediationResponse;
+  readonly result: AiDiagnosisResult;
   readonly processingTimeMs: number;
 }
 

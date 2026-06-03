@@ -25,22 +25,26 @@ const DEFAULT_DEMO_URL = 'http://localhost:3000';
 const CONTAINER_NAME = 'demo-crash-service';
 const HEAL_WAIT_MS = 3000; // time to let Aegis detect + restart
 
-type ChaosMode = 'oom' | 'timeout' | 'crash';
+type ChaosMode = 'oom' | 'timeout' | 'crash' | 'permission' | 'port';
 
 const CHAOS_ENDPOINTS: Record<ChaosMode, string> = {
   oom: '/crash/oom',
   timeout: '/crash/timeout',
   crash: '/crash',
+  permission: '/crash/permission',
+  port: '/crash/port',
 };
 
 const CHAOS_DESCRIPTIONS: Record<ChaosMode, string> = {
   oom: 'OOM crash',
   timeout: 'timeout hang',
   crash: 'process crash',
+  permission: 'permission denied',
+  port: 'port collision',
 };
 
 function isChaosMode(value: string | undefined): value is ChaosMode {
-  return value === 'oom' || value === 'timeout' || value === 'crash';
+  return value === 'oom' || value === 'timeout' || value === 'crash' || value === 'permission' || value === 'port';
 }
 
 /**
