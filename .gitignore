@@ -22,15 +22,11 @@ apps/
 frontend/
 
 # local Python environments
-services/rl-lab/.venv*/
+services/rl-engine/.venv*/
 services/ai-engine/__pycache__/
-services/rl-lab/__pycache__/
+services/rl-engine/__pycache__/
 *.pyc
-
-# virtualenvs for rl-agent
-rl-agent/.venv/
-rl-agent/.venv3.11/
 
 # AI model artifacts (local only)
 services/ai-engine/models/
-services/rl-lab/models/
+services/rl-engine/models/

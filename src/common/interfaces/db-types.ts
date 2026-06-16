@@ -30,5 +30,6 @@ export enum ActionType {
 
 export enum RiskLevel {
   LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
   HIGH = 'HIGH',
 }

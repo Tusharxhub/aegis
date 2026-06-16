@@ -21,9 +21,6 @@ export const IGNORED_CONTAINERS: readonly string[] = [
   'aegis-kafka-ui',
   'aegis-ai-engine',
   'aegis-control-plane',
-  'aegis-postgres',
-  'aegis-redis',
-  'aegis-mongo',
 ] as const;
 
 export const IGNORED_CONTAINERS_SET = new Set<string>(IGNORED_CONTAINERS);

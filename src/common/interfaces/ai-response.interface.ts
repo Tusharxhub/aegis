@@ -20,7 +20,7 @@ export interface AiDiagnosisResult {
   readonly incidentType: string;
   readonly analysis: string;
   readonly confidenceScore: number;
-  readonly riskLevel: 'LOW' | 'HIGH';
+  readonly riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
   readonly suggestedAction: SuggestedActionType;
   readonly reasoning: string;
   readonly embedding?: readonly number[];

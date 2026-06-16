@@ -165,11 +165,11 @@ export class OrchestratorService implements OnModuleInit {
     const confidence = diagnosis.confidenceScore;
     const riskLevel = diagnosis.riskLevel;
 
-    // Safety gate: only execute if confidence meets threshold and risk is LOW
+    // Safety gate: only execute if confidence meets threshold, risk is LOW, and action is RESTART
     const safetyPassed =
       confidence >= DEFAULT_CONFIDENCE_THRESHOLD &&
       riskLevel === 'LOW' &&
-      action !== 'IGNORE';
+      action === 'RESTART_CONTAINER';
 
     this.logger.log(
       `[${correlationId}] Safety check: action=${action} confidence=${confidence.toFixed(2)} risk=${riskLevel} pass=${safetyPassed}`,
