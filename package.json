@@ -9,6 +9,7 @@
     "aegis": "./dist/cli/index.js"
   },
   "scripts": {
+    "dev": "npm run start:dev",
     "build": "nest build",
     "start:dev": "nest start --watch",
     "build:cli": "tsc -p cli/tsconfig.json",
