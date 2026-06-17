@@ -8,8 +8,8 @@ import { KafkaHealthService } from './kafka/kafka.health.js';
  * Bootstrap — Aegis Control Plane
  *
  * Headless backend-only service. Kafka-native event backbone.
- * Graceful shutdown: captures SIGTERM/SIGINT to allow Kafka consumers
- * and MongoDB connections to disconnect cleanly before process exit.
+ * Graceful shutdown: captures SIGTERM/SIGINT to allow Kafka consumers,
+ * outbox workers, and MongoDB connections to disconnect cleanly before process exit.
  */
 async function bootstrap(): Promise<void> {
   const logger = new Logger('Bootstrap');
@@ -30,8 +30,20 @@ async function bootstrap(): Promise<void> {
     exclude: ['/'],
   });
 
-  // Graceful shutdown — allows Kafka consumers and Mongo to disconnect cleanly
+  // Graceful shutdown — allows Kafka consumers, outbox, and Mongo to disconnect cleanly
   app.enableShutdownHooks();
+
+  // Log shutdown signals before they propagate to NestJS lifecycle hooks
+  const shutdownLogger = new Logger('Shutdown');
+  const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
+  for (const signal of signals) {
+    process.on(signal, () => {
+      shutdownLogger.log('[AEGIS] Shutdown requested');
+      shutdownLogger.log('[KAFKA] Stopping consumer supervisors');
+      shutdownLogger.log('[KAFKA] Disconnecting consumers');
+      shutdownLogger.log('[KAFKA] Disconnecting producer');
+    });
+  }
 
   const port = parseInt(
     process.env.BACKEND_PORT ?? process.env.PORT ?? '3001',

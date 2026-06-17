@@ -52,28 +52,37 @@ export class OrchestratorController {
 
   /**
    * Get Kafka health snapshot.
+   * Distinguishes between CONNECTED, CONNECTING, RESTARTING, DEGRADED, DISCONNECTED, and STOPPING.
    */
   @Get('health/kafka')
   getKafkaHealth() {
     const snapshot = this.kafkaProducer.getHealthSnapshot();
     const consumersConnected = snapshot.consumerGroups.length > 0 && snapshot.consumerGroups.every(c => c.connected);
-    const isHealthy = snapshot.producerConnected && consumersConnected;
+    const consumerState = snapshot.consumerState;
+    const restartAttempts = snapshot.restartAttempts;
+    const isHealthy = snapshot.producerConnected && consumersConnected && consumerState === 'CONNECTED';
 
-    if (!isHealthy) {
+    if (isHealthy) {
       return {
-        status: 'degraded',
-        broker: snapshot.broker.join(', '),
+        status: 'healthy',
         producerConnected: snapshot.producerConnected,
         consumersConnected,
-        message: 'Kafka is unreachable. Start infrastructure with npm run infra:up.',
+        consumerState,
+        restartAttempts: 0,
       };
     }
 
+    const isRecovering = consumerState === 'RESTARTING' || consumerState === 'CONNECTING';
     return {
-      status: 'healthy',
-      broker: snapshot.broker.join(', '),
+      status: isRecovering ? 'degraded' : 'unhealthy',
       producerConnected: snapshot.producerConnected,
       consumersConnected,
+      consumerState,
+      restartAttempts,
+      message: isRecovering
+        ? 'Kafka recovery is in progress.'
+        : 'Kafka is unreachable. Start infrastructure with npm run infra:up.',
+      ...(snapshot.lastError ? { lastError: snapshot.lastError } : {}),
     };
   }
 

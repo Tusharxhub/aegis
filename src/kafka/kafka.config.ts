@@ -62,6 +62,16 @@ export class KafkaConfigService {
     };
   }
 
+  getRestartInitialDelayMs(): number { return this.parsePositiveInteger('KAFKA_RESTART_INITIAL_DELAY_MS', 1000); }
+  getRestartMaxDelayMs(): number { return this.parsePositiveInteger('KAFKA_RESTART_MAX_DELAY_MS', 30_000); }
+  getRestartMaxAttempts(): number {
+    const configured = this.configService.get<string>('KAFKA_RESTART_MAX_ATTEMPTS');
+    if (configured === undefined || configured === null || configured.trim() === '') return 0;
+    const parsed = Number.parseInt(configured, 10);
+    if (!Number.isFinite(parsed) || parsed < 0) throw new Error('KAFKA_RESTART_MAX_ATTEMPTS must be a non-negative integer (0 = unlimited).');
+    return parsed;
+  }
+
   private parsePositiveInteger(key: string, fallback: number): number {
     const rawValue = this.configService.get<string>(key);
     if (!rawValue?.trim()) return fallback;

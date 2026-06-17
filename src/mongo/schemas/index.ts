@@ -5,3 +5,4 @@ export * from './plan.schema.js';
 export * from './execution.schema.js';
 export * from './episode.schema.js';
 export * from './metrics.schema.js';
+export * from './outbox.schema.js';

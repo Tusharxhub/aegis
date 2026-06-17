@@ -2,10 +2,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Kafka } from 'kafkajs';
 import type { KafkaConsumerGroupId } from './kafka.constants.js';
 
+export type ConsumerConnectionState = 'CONNECTED' | 'CONNECTING' | 'RESTARTING' | 'DEGRADED' | 'DISCONNECTED' | 'STOPPING';
+
 export interface KafkaConsumerHealthState {
   readonly groupId: KafkaConsumerGroupId;
   readonly connected: boolean;
+  readonly state: ConsumerConnectionState;
   readonly topics: readonly string[];
+  readonly restartAttempts: number;
+  readonly lastError?: string;
 }
 
 export interface KafkaClusterMetadata {
@@ -32,6 +37,8 @@ export interface KafkaHealthSnapshot {
   readonly broker: string[];
   readonly producerConnected: boolean;
   readonly consumerGroups: readonly KafkaConsumerHealthState[];
+  readonly consumerState: ConsumerConnectionState;
+  readonly restartAttempts: number;
   readonly lastPublishedAt: string | null;
   readonly lastConsumedAt: string | null;
   readonly lastError: string | null;
@@ -91,8 +98,21 @@ export class KafkaHealthService {
     groupId: KafkaConsumerGroupId,
     connected: boolean,
     topics: readonly string[],
+    state?: ConsumerConnectionState,
+    restartAttempts?: number,
+    lastError?: string,
   ): void {
-    this.consumerGroups.set(groupId, { groupId, connected, topics });
+    const resolvedState: ConsumerConnectionState = state ?? (connected ? 'CONNECTED' : 'DISCONNECTED');
+    const resolvedRestartAttempts = restartAttempts ?? (this.consumerGroups.get(groupId)?.restartAttempts ?? 0);
+    const entry: KafkaConsumerHealthState = {
+      groupId,
+      connected,
+      state: resolvedState,
+      topics,
+      restartAttempts: resolvedRestartAttempts,
+      ...(lastError !== undefined ? { lastError } : {}),
+    };
+    this.consumerGroups.set(groupId, entry);
   }
 
   markPublished(timestamp: string): void {
@@ -105,6 +125,29 @@ export class KafkaHealthService {
 
   setError(message: string | null): void {
     this.lastError = message;
+  }
+
+  getConsumerGroupState(groupId: KafkaConsumerGroupId): KafkaConsumerHealthState | undefined {
+    return this.consumerGroups.get(groupId);
+  }
+
+  getOverallConsumerState(): ConsumerConnectionState {
+    const states = Array.from(this.consumerGroups.values());
+    if (states.length === 0) return 'DISCONNECTED';
+    if (states.some(s => s.state === 'STOPPING')) return 'STOPPING';
+    if (states.every(s => s.state === 'CONNECTED')) return 'CONNECTED';
+    if (states.some(s => s.state === 'RESTARTING')) return 'RESTARTING';
+    if (states.some(s => s.state === 'CONNECTING')) return 'CONNECTING';
+    if (states.some(s => s.state === 'DEGRADED')) return 'DEGRADED';
+    return 'DISCONNECTED';
+  }
+
+  getTotalRestartAttempts(): number {
+    let total = 0;
+    for (const state of this.consumerGroups.values()) {
+      total += state.restartAttempts;
+    }
+    return total;
   }
 
   async withRetry<T>(
@@ -186,6 +229,8 @@ export class KafkaHealthService {
       broker: this.broker,
       producerConnected: this.producerConnected,
       consumerGroups: Array.from(this.consumerGroups.values()),
+      consumerState: this.getOverallConsumerState(),
+      restartAttempts: this.getTotalRestartAttempts(),
       lastPublishedAt: this.lastPublishedAt,
       lastConsumedAt: this.lastConsumedAt,
       lastError: this.lastError,
@@ -194,7 +239,7 @@ export class KafkaHealthService {
     };
   }
 
-  private sleep(ms: number): Promise<void> {
+  sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

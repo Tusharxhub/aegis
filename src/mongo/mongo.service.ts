@@ -13,6 +13,7 @@ import {
   ActionExecutionSchema,
   EpisodeSchema,
   MetricsSnapshotSchema,
+  OutboxEventSchema,
 } from './schemas/index.js';
 
 /**
@@ -35,6 +36,7 @@ export class MongoService implements OnModuleInit, OnModuleDestroy {
   public ExecutionModel!: Model<any>;
   public EpisodeModel!: Model<any>;
   public MetricsModel!: Model<any>;
+  public OutboxModel!: Model<any>;
 
   async onModuleInit(): Promise<void> {
     const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
@@ -94,9 +96,9 @@ export class MongoService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     if (this.connection) {
-      this.logger.log('Disconnecting Mongoose from MongoDB...');
+      this.logger.log('[MONGO] Completing pending writes');
       await this.connection.close();
-      this.logger.log('MongoDB disconnected.');
+      this.logger.log('[MONGO] Shutdown complete');
     }
   }
 
@@ -122,6 +124,10 @@ export class MongoService implements OnModuleInit, OnModuleDestroy {
     this.MetricsModel = this.connection.model(
       'MetricsSnapshot',
       MetricsSnapshotSchema,
+    );
+    this.OutboxModel = this.connection.model(
+      'OutboxEvent',
+      OutboxEventSchema,
     );
 
     this.logger.log('Mongoose schemas compiled and models initialized.');

@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { DockerService } from '../docker/docker.service.js';
 import { AiAgentService, type DiagnoseResponse } from '../ai-agent/ai-agent.service.js';
 import { AuditService } from './audit.service.js';
+import { OutboxService } from './outbox.service.js';
 import { KafkaProducerService } from '../kafka/kafka.producer.js';
 import { KAFKA_TOPICS } from '../kafka/kafka.constants.js';
 import { RemediationAction } from '../kafka/kafka.types.js';
@@ -23,6 +24,11 @@ import type { DockerCrashEvent } from '../common/interfaces/docker-event.interfa
  * Kafka-native architecture. No BullMQ, no Redis, no WebSocket.
  * Reacts to Docker crash events via EventEmitter2, performs AI diagnosis,
  * and executes remediation actions with safety checks.
+ *
+ * KEY RESILIENCE PRINCIPLE:
+ *   MongoDB persistence is always attempted FIRST and independently of Kafka.
+ *   A Kafka outage must never prevent incident storage or audit records.
+ *   All Kafka publications go through the durable outbox.
  */
 @Injectable()
 export class OrchestratorService implements OnModuleInit {
@@ -33,6 +39,7 @@ export class OrchestratorService implements OnModuleInit {
     private readonly dockerService: DockerService,
     private readonly aiAgent: AiAgentService,
     private readonly auditService: AuditService,
+    private readonly outbox: OutboxService,
     private readonly kafkaProducer: KafkaProducerService,
   ) {}
 
@@ -42,6 +49,9 @@ export class OrchestratorService implements OnModuleInit {
 
   /**
    * Main event handler — triggered when a Docker crash event is detected.
+   *
+   * MongoDB writes are isolated from Kafka failures. Each secondary operation
+   * is wrapped in its own error boundary to prevent cascading failures.
    */
   @OnEvent('docker.crash', { async: true })
   async handleCrashEvent(event: DockerCrashEvent): Promise<void> {
@@ -56,8 +66,13 @@ export class OrchestratorService implements OnModuleInit {
       `[${correlationId}] Processing crash event for [${event.containerName}] (${event.eventType}, exit: ${event.exitCode})`,
     );
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 1: Persist core incident in MongoDB (MUST succeed independently)
+    // ─────────────────────────────────────────────────────────────────────────
+    let serviceId: string | null = null;
+    let eventId: string = correlationId;
+
     try {
-      // Step 1: Upsert the service record
       const service = await this.auditService.upsertService(
         event.containerId,
         event.containerName,
@@ -65,10 +80,13 @@ export class OrchestratorService implements OnModuleInit {
         ServiceStatus.CRASHED,
         event.exitCode,
       );
+      serviceId = service?._id?.toString() ?? null;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`[${correlationId}] Failed to upsert service in MongoDB: ${message}`);
+    }
 
-      const serviceId = service?._id?.toString() ?? null;
-
-      // Step 2: Log the crash event in the audit ledger
+    try {
       const eventRecord = await this.auditService.logCrashEvent(
         serviceId ?? event.containerId,
         normalizedEventType,
@@ -76,11 +94,18 @@ export class OrchestratorService implements OnModuleInit {
         event.logs,
         event.metadata,
       );
+      eventId = eventRecord?._id?.toString() ?? correlationId;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`[${correlationId}] Failed to persist crash event in MongoDB: ${message}`);
+    }
 
-      const eventId = eventRecord?._id?.toString() ?? correlationId;
-
-      // Step 3: Publish incident detected to Kafka
-      await this.kafkaProducer.publish(KAFKA_TOPICS.INCIDENT_DETECTED, {
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 2: Publish incident detected via durable outbox
+    //         (Kafka failure does NOT block the pipeline)
+    // ─────────────────────────────────────────────────────────────────────────
+    try {
+      await this.outbox.storeAndPublish(KAFKA_TOPICS.INCIDENT_DETECTED, {
         eventType: 'INCIDENT_DETECTED',
         source: 'incident-service',
         correlationId,
@@ -96,21 +121,45 @@ export class OrchestratorService implements OnModuleInit {
           logsPreview: event.logs.slice(0, 500),
         },
       });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`[${correlationId}] Kafka publish failed for INCIDENT_DETECTED. Incident preserved in outbox for later delivery: ${message}`);
+    }
 
-      // Step 4: AI Diagnosis
-      this.logger.log(`[${correlationId}] Sending logs to AI Engine for analysis...`);
-      const diagnosis = await this.aiAgent.diagnoseLogs(event.logs);
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 3: AI Diagnosis (with fallback tracking)
+    // ─────────────────────────────────────────────────────────────────────────
+    this.logger.log(`[${correlationId}] Sending logs to AI Engine for analysis...`);
+    const diagnosis = await this.aiAgent.diagnoseLogs(event.logs);
 
-      // Step 5: Persist embedding if available
-      if (diagnosis.embedding && diagnosis.embedding.length > 0) {
+    // Track whether this was a fallback (AI unavailable)
+    const isFallbackDiagnosis = diagnosis.aiEngineAvailable === false;
+
+    if (isFallbackDiagnosis) {
+      this.logger.warn(`[${correlationId}] AI Engine unavailable — using safe fallback diagnosis. Incident marked for operator review.`);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 4: Persist embedding if available (isolated error boundary)
+    // ─────────────────────────────────────────────────────────────────────────
+    if (diagnosis.embedding && diagnosis.embedding.length > 0) {
+      try {
         await this.auditService.logIncidentEmbedding(
           eventId,
           diagnosis.embedding,
           diagnosis.incidentType,
         );
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`[${correlationId}] Failed to persist embedding: ${message}`);
       }
+    }
 
-      // Step 6: Create remediation plan
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 5: Create remediation plan in MongoDB (isolated error boundary)
+    // ─────────────────────────────────────────────────────────────────────────
+    let planId: string = correlationId;
+    try {
       const plan = await this.auditService.logRemediationPlan(
         eventId,
         diagnosis.analysis,
@@ -119,11 +168,17 @@ export class OrchestratorService implements OnModuleInit {
         diagnosis.riskLevel as RiskLevel,
         diagnosis.reasoning,
       );
+      planId = plan?._id?.toString() ?? correlationId;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`[${correlationId}] Failed to persist remediation plan: ${message}`);
+    }
 
-      const planId = plan?._id?.toString() ?? correlationId;
-
-      // Step 7: Publish diagnosis result to Kafka
-      await this.kafkaProducer.publish(KAFKA_TOPICS.AI_DIAGNOSIS_COMPLETED, {
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 6: Publish diagnosis result via durable outbox (isolated)
+    // ─────────────────────────────────────────────────────────────────────────
+    try {
+      await this.outbox.storeAndPublish(KAFKA_TOPICS.AI_DIAGNOSIS_COMPLETED, {
         eventType: 'AI_DIAGNOSIS_COMPLETED',
         source: 'ai-engine',
         correlationId,
@@ -144,13 +199,48 @@ export class OrchestratorService implements OnModuleInit {
           completedAt: new Date().toISOString(),
         },
       });
-
-      // Step 8: Execute remediation (with safety checks)
-      await this.executeRemediation(event, diagnosis, planId, eventId, correlationId, startTime);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`[${correlationId}] Orchestration pipeline failed: ${message}`);
+      this.logger.warn(`[${correlationId}] Kafka publish failed for AI_DIAGNOSIS_COMPLETED. Event preserved in outbox: ${message}`);
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 7: Emit degraded-status event if AI was unavailable
+    // ─────────────────────────────────────────────────────────────────────────
+    if (isFallbackDiagnosis) {
+      try {
+        await this.outbox.storeAndPublish(KAFKA_TOPICS.AUDIT_EVENTS, {
+          eventType: 'AI_ENGINE_UNAVAILABLE',
+          source: 'ai-engine',
+          correlationId,
+          payload: {
+            auditId: randomUUID(),
+            entityType: 'incident',
+            entityId: eventId,
+            action: 'AI_FALLBACK_USED',
+            status: 'DEGRADED',
+            summary: 'AI engine was unavailable. Fallback diagnosis used. Incident marked for operator review.',
+            recordedAt: new Date().toISOString(),
+            details: {
+              containerName: event.containerName,
+              containerId: event.containerId,
+              fallbackAction: diagnosis.suggestedAction,
+              fallbackConfidence: diagnosis.confidenceScore,
+            },
+          },
+        });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`[${correlationId}] Failed to emit AI degraded-status event: ${message}`);
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Step 8: Execute remediation (with safety checks)
+    //         Never bypass 0.85 confidence threshold.
+    //         Never treat fallback as a successful diagnosis.
+    // ─────────────────────────────────────────────────────────────────────────
+    await this.executeRemediation(event, diagnosis, planId, eventId, correlationId, startTime, isFallbackDiagnosis);
   }
 
   private async executeRemediation(
@@ -160,47 +250,62 @@ export class OrchestratorService implements OnModuleInit {
     eventId: string,
     correlationId: string,
     pipelineStartTime: number,
+    isFallbackDiagnosis: boolean,
   ): Promise<void> {
     const action = diagnosis.suggestedAction;
     const confidence = diagnosis.confidenceScore;
     const riskLevel = diagnosis.riskLevel;
 
     // Safety gate: only execute if confidence meets threshold, risk is LOW, and action is RESTART
+    // Never bypass the 0.85 safety threshold
+    // Never execute remediation on fallback diagnosis
     const safetyPassed =
+      !isFallbackDiagnosis &&
       confidence >= DEFAULT_CONFIDENCE_THRESHOLD &&
       riskLevel === 'LOW' &&
       action === 'RESTART_CONTAINER';
 
     this.logger.log(
-      `[${correlationId}] Safety check: action=${action} confidence=${confidence.toFixed(2)} risk=${riskLevel} pass=${safetyPassed}`,
+      `[${correlationId}] Safety check: action=${action} confidence=${confidence.toFixed(2)} risk=${riskLevel} fallback=${isFallbackDiagnosis} pass=${safetyPassed}`,
     );
 
-    // Publish remediation started
+    // Publish remediation started via outbox (isolated)
     const executionId = randomUUID();
-    await this.kafkaProducer.publish(KAFKA_TOPICS.REMEDIATION_STARTED, {
-      eventType: 'REMEDIATION_STARTED',
-      source: 'remediation-engine',
-      correlationId,
-      payload: {
-        eventId,
-        planId,
-        executionId,
-        containerId: event.containerId,
-        containerName: event.containerName,
-        action: action as RemediationAction,
-        startedAt: new Date().toISOString(),
-        safetyPassed,
-        confidenceScore: confidence,
-        riskLevel: riskLevel as RiskLevel,
-      },
-    });
+    try {
+      await this.outbox.storeAndPublish(KAFKA_TOPICS.REMEDIATION_STARTED, {
+        eventType: 'REMEDIATION_STARTED',
+        source: 'remediation-engine',
+        correlationId,
+        payload: {
+          eventId,
+          planId,
+          executionId,
+          containerId: event.containerId,
+          containerName: event.containerName,
+          action: action as RemediationAction,
+          startedAt: new Date().toISOString(),
+          safetyPassed,
+          confidenceScore: confidence,
+          riskLevel: riskLevel as RiskLevel,
+        },
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`[${correlationId}] Kafka publish failed for REMEDIATION_STARTED: ${message}`);
+    }
 
     if (!safetyPassed) {
+      const skipReason = isFallbackDiagnosis
+        ? 'AI engine unavailable — fallback diagnosis cannot trigger remediation'
+        : 'Safety check failed — remediation skipped';
+
       this.logger.warn(
-        `[${correlationId}] Remediation SKIPPED for [${event.containerName}] — safety check failed.`,
+        `[${correlationId}] Remediation SKIPPED for [${event.containerName}] — ${skipReason}.`,
       );
-      await this.auditService.updatePlanStatus(planId, RemediationStatus.SKIPPED);
-      await this.publishRemediationCompleted(event, action, planId, executionId, correlationId, false, 'Safety check failed — remediation skipped', Date.now() - pipelineStartTime);
+
+      // Persist skip status (isolated)
+      try { await this.auditService.updatePlanStatus(planId, RemediationStatus.SKIPPED); } catch { /* swallow */ }
+      await this.publishRemediationCompleted(event, action, planId, executionId, correlationId, false, skipReason, Date.now() - pipelineStartTime);
       return;
     }
 
@@ -210,7 +315,8 @@ export class OrchestratorService implements OnModuleInit {
     let executionLogs = '';
 
     try {
-      await this.auditService.updatePlanStatus(planId, RemediationStatus.EXECUTING);
+      // Update plan status (isolated)
+      try { await this.auditService.updatePlanStatus(planId, RemediationStatus.EXECUTING); } catch { /* swallow */ }
 
       if (action === 'RESTART_CONTAINER') {
         await this.dockerService.restartContainer(event.containerId);
@@ -233,30 +339,45 @@ export class OrchestratorService implements OnModuleInit {
 
     const durationMs = Date.now() - actionStart;
 
-    // Persist execution result
-    await this.auditService.logActionExecution(
-      planId,
-      action,
-      success,
-      executionLogs,
-      durationMs,
-      success ? undefined : executionLogs,
-    );
-
-    await this.auditService.updatePlanStatus(
-      planId,
-      success ? RemediationStatus.COMPLETED : RemediationStatus.FAILED,
-      Date.now() - pipelineStartTime,
-    );
-
-    // Update service status
-    if (success && action === 'RESTART_CONTAINER') {
-      await this.auditService.upsertService(
-        event.containerId,
-        event.containerName,
-        event.imageName,
-        ServiceStatus.RESTARTING,
+    // Persist execution result (isolated — each operation independent)
+    try {
+      await this.auditService.logActionExecution(
+        planId,
+        action,
+        success,
+        executionLogs,
+        durationMs,
+        success ? undefined : executionLogs,
       );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`[${correlationId}] Failed to persist action execution: ${message}`);
+    }
+
+    try {
+      await this.auditService.updatePlanStatus(
+        planId,
+        success ? RemediationStatus.COMPLETED : RemediationStatus.FAILED,
+        Date.now() - pipelineStartTime,
+      );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`[${correlationId}] Failed to update plan status: ${message}`);
+    }
+
+    // Update service status (isolated)
+    if (success && action === 'RESTART_CONTAINER') {
+      try {
+        await this.auditService.upsertService(
+          event.containerId,
+          event.containerName,
+          event.imageName,
+          ServiceStatus.RESTARTING,
+        );
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`[${correlationId}] Failed to update service status: ${message}`);
+      }
     }
 
     await this.publishRemediationCompleted(event, action, planId, executionId, correlationId, success, executionLogs, durationMs);
@@ -272,22 +393,27 @@ export class OrchestratorService implements OnModuleInit {
     logs: string,
     durationMs: number,
   ): Promise<void> {
-    await this.kafkaProducer.publish(KAFKA_TOPICS.REMEDIATION_COMPLETED, {
-      eventType: 'REMEDIATION_COMPLETED',
-      source: 'remediation-engine',
-      correlationId,
-      payload: {
-        eventId: correlationId,
-        planId,
-        executionId,
-        containerId: event.containerId,
-        containerName: event.containerName,
-        action: action as RemediationAction,
-        success,
-        logs,
-        durationMs,
-        completedAt: new Date().toISOString(),
-      },
-    });
+    try {
+      await this.outbox.storeAndPublish(KAFKA_TOPICS.REMEDIATION_COMPLETED, {
+        eventType: 'REMEDIATION_COMPLETED',
+        source: 'remediation-engine',
+        correlationId,
+        payload: {
+          eventId: correlationId,
+          planId,
+          executionId,
+          containerId: event.containerId,
+          containerName: event.containerName,
+          action: action as RemediationAction,
+          success,
+          logs,
+          durationMs,
+          completedAt: new Date().toISOString(),
+        },
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`[${correlationId}] Kafka publish failed for REMEDIATION_COMPLETED. Event preserved in outbox: ${message}`);
+    }
   }
 }

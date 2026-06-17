@@ -22,19 +22,31 @@ export interface DiagnoseResponse {
    * instead of synthetic noise. Absent if the AI engine is unreachable.
    */
   readonly embedding?: number[];
+  readonly aiEngineAvailable?: boolean;
 }
 
 @Injectable()
 export class AiAgentService {
   private readonly logger = new Logger(AiAgentService.name);
   private readonly aiEngineUrl: string;
-  private readonly requestTimeoutMs = 15_000;
+  private readonly requestTimeoutMs: number;
   private readonly maxRetries = 3;
+  private lastDiagnosisWasFallback = false;
 
   constructor(private readonly configService: ConfigService) {
     this.aiEngineUrl =
       this.configService.get<string>('AI_ENGINE_URL') ??
       'http://aegis-ai-engine:8000';
+    this.requestTimeoutMs =
+      this.configService.get<number>('AI_ENGINE_TIMEOUT_MS') ?? 10_000;
+  }
+
+  /**
+   * Returns whether the AI engine is currently reachable,
+   * based on the outcome of the last diagnosis attempt.
+   */
+  isAiEngineAvailable(): boolean {
+    return !this.lastDiagnosisWasFallback;
   }
 
   /**
@@ -48,25 +60,30 @@ export class AiAgentService {
 
     try {
       const data = await this.requestDiagnosis(url, logs);
+      this.lastDiagnosisWasFallback = false;
       this.logger.log(
         ` Diagnosis complete: Class [${data.incidentType}] | Suggestion: ${data.suggestedAction} (Confidence: ${data.confidenceScore.toFixed(2)})`,
       );
-      return data;
+      return { ...data, aiEngineAvailable: true };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(
         ` Failed to diagnose logs via custom AI Engine: ${message}`,
       );
 
+      this.lastDiagnosisWasFallback = true;
+
       // Strict safety fallback: Do not perform automatic remediation
+      // Never report this as a successful AI diagnosis
       return {
         incidentType: 'UNKNOWN_FAILURE',
-        analysis: 'Inference pipeline failure. Unable to parse container logs.',
+        analysis: 'Inference pipeline unavailable.',
         confidenceScore: 0.0,
         riskLevel: 'HIGH',
         suggestedAction: 'IGNORE',
-        reasoning: `AI client connectivity error: ${message}`,
+        reasoning: 'AI engine is offline or unreachable.',
         similarIncidents: [],
+        aiEngineAvailable: false,
       };
     }
   }
