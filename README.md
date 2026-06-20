@@ -347,11 +347,11 @@ node scripts/reset-docker-and-rebuild.js
 
 ---
 
-# Developed By
+# 👨‍💻 Developed By
 
 ## Tushar Kanti Dey
 
-*Full Stack Developer - DevOps Engineer - AI Infrastructure Enthusiast*
+*Full Stack Developer · DevOps Engineer · AI Infrastructure Enthusiast*
 
 Aegis was developed as a final-year B.Tech Computer Science and Engineering capstone project at **Adamas University**.
 

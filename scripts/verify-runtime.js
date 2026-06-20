@@ -8,7 +8,7 @@
  *
  * Usage: node scripts/verify-runtime.js
  *
- * Checks: Docker, MongoDB, Kafka, AI Engine, Demo Crash Service, NestJS Backend
+ * Checks: Docker, MongoDB, Kafka, Kafka Consumer State, AI Engine, Backend, Demo Crash Service
  */
 
 const { execSync } = require('child_process');
@@ -20,6 +20,7 @@ const DEMO_URL = process.env.DEMO_CRASH_SERVICE_URL || 'http://localhost:3000';
 
 const GREEN = '\x1b[32m';
 const RED = '\x1b[31m';
+const YELLOW = '\x1b[33m';
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
 
@@ -66,19 +67,27 @@ async function main() {
   const mongoOk = execCheck("docker exec aegis-mongodb mongosh --quiet --eval \"db.adminCommand('ping').ok\"", 10000);
   results.push({ name: 'MongoDB', ok: mongoOk });
 
-  // Kafka
+  // Kafka (broker check via backend health endpoint)
   const kafkaResult = await httpGet(`${BACKEND_URL}/api/orchestrator/health/kafka`);
   let kafkaOk = false;
+  let kafkaData = null;
   if (kafkaResult.ok) {
     try {
-      const data = JSON.parse(kafkaResult.body);
-      kafkaOk = data.status === 'healthy';
+      kafkaData = JSON.parse(kafkaResult.body);
+      kafkaOk = kafkaData.status === 'healthy';
     } catch { /* ignore */ }
   }
   if (!kafkaOk) {
     kafkaOk = execCheck('docker exec aegis-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list', 10000);
   }
   results.push({ name: 'Kafka Broker', ok: kafkaOk });
+
+  // Kafka Consumer State
+  let consumerOk = false;
+  if (kafkaData && kafkaData.consumerState) {
+    consumerOk = kafkaData.consumerState === 'CONNECTED';
+  }
+  results.push({ name: 'Kafka Consumers', ok: consumerOk, detail: kafkaData?.consumerState ?? 'unknown' });
 
   // NestJS Backend
   const backendResult = await httpGet(`${BACKEND_URL}/api/health`);
@@ -96,7 +105,8 @@ async function main() {
   for (const r of results) {
     const icon = r.ok ? `${GREEN}✓${RESET}` : `${RED}✗${RESET}`;
     const label = r.ok ? `${GREEN}PASS${RESET}` : `${RED}FAIL${RESET}`;
-    console.log(`  ${icon} ${r.name.padEnd(22)} ${label}`);
+    const detail = r.detail ? ` (${r.detail})` : '';
+    console.log(`  ${icon} ${r.name.padEnd(22)} ${label}${detail}`);
   }
 
   const passed = results.filter((r) => r.ok).length;

@@ -67,6 +67,7 @@ erDiagram
 - **remediation_plans**: Stores the neural net diagnosis outputs, risk level labels, and suggested actions.
 - **action_executions**: Audits execution logs, outcomes, and task duration metrics.
 - **episodes**: Replay buffer storing the Markov Decision Process `(State, Action, Reward, NextState)` tuples for offline Reinforcement Learning training.
+- **outbox_events**: Durable Kafka outbox — stores events with retry logic to survive Kafka outages.
 
 ---
 
@@ -81,6 +82,7 @@ erDiagram
 | `aegis.remediation.started` | Remediation execution started |
 | `aegis.remediation.completed` | Remediation execution completed |
 | `aegis.audit.events` | Audit trail events |
+| `aegis.rl.feedback` | RL feedback for offline training |
 
 ---
 
@@ -90,9 +92,10 @@ The orchestrator enforces a deterministic safety policy before executing any rem
 
 ```typescript
 const safetyPassed =
+  !isFallbackDiagnosis &&
   confidenceScore >= 0.85 &&
   riskLevel === 'LOW' &&
-  suggestedAction !== 'IGNORE';
+  suggestedAction === 'RESTART_CONTAINER';
 ```
 
 Only actions meeting all three criteria are executed automatically. All other actions are marked as `SKIPPED` and flagged for operator review.

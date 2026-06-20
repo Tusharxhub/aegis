@@ -23,9 +23,10 @@ Before executing any action mapped to the Docker daemon, the orchestrator evalua
 
 ```typescript
 const isSafetyPassed =
+  !isFallbackDiagnosis &&
   diagnosis.confidenceScore >= 0.85 &&
   diagnosis.riskLevel === 'LOW' &&
-  diagnosis.suggestedAction !== 'IGNORE';
+  diagnosis.suggestedAction === 'RESTART_CONTAINER';
 ```
 
 - **Confidence Score Gate**: The MLP classifier's probability score must exceed **85%**. If the model is uncertain, it fails open and skips auto-healing.
