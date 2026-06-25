@@ -28,7 +28,7 @@ import { KAFKA_TOPICS } from '../kafka/kafka.constants.js';
  * (`die`, `oom`). On crash detection:
  *   1. Extracts the last N lines of container logs.
  *   2. Normalizes the event into a DockerCrashEvent.
- *   3. Emits the event via NestJS EventEmitter2 (decoupled from BullMQ).
+ *   3. Emits the event via NestJS EventEmitter2.
  *
  * The Docker socket WILL drop connections. This service implements exponential
  * backoff reconnection with jitter to handle flaky socket states.

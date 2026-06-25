@@ -13,7 +13,6 @@ import { validateEnvironmentVariables } from './common/config/environment.js';
  * AppModule — Root module for Project Aegis.
  *
  * Kafka-native, headless AIOps control plane.
- * No WebSocket, no Redis, no BullMQ, no frontend.
  */
 @Module({
   imports: [

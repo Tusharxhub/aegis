@@ -69,6 +69,10 @@ class DiagnoseRequest(BaseModel):
     log_text: str = Field(..., min_length=1, description="Raw log lines from container output")
 
 
+class TrainRequest(BaseModel):
+    samples_per_class: int = Field(default=120, ge=10, le=1000, description="Training samples per incident class")
+
+
 class SimilarIncident(BaseModel):
     incident_id: str
     log_text: str
@@ -321,4 +325,76 @@ def diagnose_logs(request: DiagnoseRequest) -> DiagnoseResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Inference pipeline failure: {exc}",
+        )
+
+
+@app.post("/train")
+def train_model(request: TrainRequest) -> dict[str, Any]:
+    """
+    Retrain the MLP classifier on freshly generated synthetic data.
+    Used for offline research and model improvement.
+    """
+    global embedding_pipeline, classifier, vector_memory
+
+    try:
+        from training.generate_synthetic_data import build_dataset
+        import csv
+        import joblib
+        from sentence_transformers import SentenceTransformer
+        from sklearn.neural_network import MLPClassifier
+
+        os.makedirs(MODELS_DIR, exist_ok=True)
+        os.makedirs(VECTOR_STORE_DIR, exist_ok=True)
+
+        data = build_dataset(samples_per_class=request.samples_per_class)
+        data_csv_path = os.path.join(BASE_DIR, "training", "synthetic_logs.csv")
+        os.makedirs(os.path.dirname(data_csv_path), exist_ok=True)
+
+        with open(data_csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["log_text", "label", "class_name"])
+            for row in data:
+                writer.writerow([row["log_text"], row["label"], row["class_name"]])
+
+        base_transformer = SentenceTransformer("all-MiniLM-L6-v2")
+        texts = [row["log_text"] for row in data]
+        labels = [row["label"] for row in data]
+
+        embeddings = base_transformer.encode(texts, show_progress_bar=False, batch_size=32)
+        X = np.array(embeddings)
+        y = np.array(labels)
+
+        mlp = MLPClassifier(
+            hidden_layer_sizes=(128, 64),
+            activation="relu",
+            solver="adam",
+            max_iter=300,
+            random_state=42,
+            early_stopping=True,
+            validation_fraction=0.1,
+        )
+        mlp.fit(X, y)
+
+        base_transformer.save(TRANSFORMER_PATH)
+        joblib.dump(mlp, CLASSIFIER_PATH)
+
+        # Reload models
+        embedding_pipeline = EmbeddingPipeline(TRANSFORMER_PATH)
+        embedding_pipeline.load()
+        classifier = IncidentClassifier(CLASSIFIER_PATH)
+        classifier.load()
+
+        logger.info("Model retrained on %d samples. Weights saved to %s.", len(data), MODELS_DIR)
+
+        return {
+            "status": "trained",
+            "samples": len(data),
+            "classes": len(set(labels)),
+            "models_dir": MODELS_DIR,
+        }
+    except Exception as exc:
+        logger.exception("Training failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Training pipeline failure: {exc}",
         )

@@ -21,7 +21,7 @@ import type { DockerCrashEvent } from '../common/interfaces/docker-event.interfa
 /**
  * OrchestratorService — The Brain of Project Aegis.
  *
- * Kafka-native architecture. No BullMQ, no Redis, no WebSocket.
+ * Kafka-native architecture.
  * Reacts to Docker crash events via EventEmitter2, performs AI diagnosis,
  * and executes remediation actions with safety checks.
  *
