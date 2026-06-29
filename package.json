@@ -32,11 +32,11 @@
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\""
   },
   "dependencies": {
-    "@nestjs/common": "^11.0.1",
+    "@nestjs/common": "^11.1.27",
     "@nestjs/config": "^4.0.4",
-    "@nestjs/core": "^11.0.1",
+    "@nestjs/core": "^11.1.27",
     "@nestjs/event-emitter": "^3.1.0",
-    "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/platform-express": "^11.1.27",
     "@nestjs/schedule": "^6.1.3",
     "@nestjs/swagger": "^11.4.4",
     "dockerode": "^5.0.0",
@@ -49,9 +49,9 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.18.0",
-    "@nestjs/cli": "^11.0.0",
+    "@nestjs/cli": "^11.0.23",
     "@nestjs/schematics": "^11.0.0",
-    "@nestjs/testing": "^11.0.1",
+    "@nestjs/testing": "^11.1.27",
     "@types/dockerode": "^4.0.1",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
