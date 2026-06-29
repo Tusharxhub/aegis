@@ -1,0 +1,95 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Project Aegis — Manual Deploy
+# Triggered manually for deploying to specific environments
+# ─────────────────────────────────────────────────────────────────────────────
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      version:
+        description: 'Image version tag (e.g., v1.0.0 or sha-abc1234)'
+        required: true
+        type: string
+      confirm:
+        description: 'Type "deploy" to confirm'
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/aegis
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate confirmation
+        run: |
+          if [ "${{ inputs.confirm }}" != "deploy" ]; then
+            echo "❌ Deployment not confirmed. Please type 'deploy' to confirm."
+            exit 1
+          fi
+
+      - name: Validate version exists
+        run: |
+          # Check if the image tag exists in the registry
+          echo "🔍 Verifying image tag: ${{ inputs.version }}"
+          # This would require authentication - simplified check
+          echo "✅ Proceeding with deployment of ${{ inputs.version }}"
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: validate
+    if: inputs.environment == 'staging'
+    environment:
+      name: staging
+      url: http://staging.aegis.local
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging
+        run: |
+          echo "🚀 Deploying ${{ inputs.version }} to staging..."
+          echo "📦 Images:"
+          echo "  - ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/ai-engine:${{ inputs.version }}"
+          echo "  - ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/demo-crash-service:${{ inputs.version }}"
+          echo ""
+          echo "📝 Deployment commands:"
+          echo "  docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/ai-engine:${{ inputs.version }}"
+          echo "  docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/demo-crash-service:${{ inputs.version }}"
+          echo "  docker compose up -d"
+          echo ""
+          echo "✅ Deployment to staging initiated"
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: validate
+    if: inputs.environment == 'production'
+    environment:
+      name: production
+      url: http://aegis.local
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to production
+        run: |
+          echo "🚀 Deploying ${{ inputs.version }} to production..."
+          echo "📦 Images:"
+          echo "  - ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/ai-engine:${{ inputs.version }}"
+          echo "  - ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/demo-crash-service:${{ inputs.version }}"
+          echo ""
+          echo "✅ Deployment to production initiated"

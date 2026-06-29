@@ -1,0 +1,78 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Project Aegis — Dependabot Configuration
+# Automated dependency updates for npm and GitHub Actions
+# ─────────────────────────────────────────────────────────────────────────────
+version: 2
+
+updates:
+  # ─── npm dependencies ──────────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "Tusharxhub"
+    labels:
+      - "dependencies"
+      - "automated"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    groups:
+      nestjs:
+        patterns:
+          - "@nestjs/*"
+        update-types:
+          - "minor"
+          - "patch"
+      kafka:
+        patterns:
+          - "kafkajs"
+      docker:
+        patterns:
+          - "dockerode"
+          - "@types/dockerode"
+      dev-tools:
+        patterns:
+          - "eslint*"
+          - "prettier"
+          - "jest"
+          - "typescript"
+        update-types:
+          - "patch"
+
+  # ─── GitHub Actions ────────────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+      - "automated"
+    commit-message:
+      prefix: "ci"
+
+  # ─── Python dependencies ───────────────────────────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/services/ai-engine"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+      - "automated"
+    commit-message:
+      prefix: "deps"

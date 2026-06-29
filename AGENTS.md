@@ -362,3 +362,94 @@ Expected logs:
 [MONGO] Completing pending writes
 [AEGIS] Shutdown complete
 ```
+
+---
+
+## GitOps & CI/CD
+
+### Workflows
+
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `ci.yml` | Push/PR to `main`, `develop` | Lint, typecheck, build, Docker validation, integration test |
+| `cd.yml` | Tag `v*`, GitHub Release | Build & push Docker images, create release with changelog |
+| `docker-publish.yml` | Push to `main` | Publish `latest` Docker images to GHCR |
+| `deploy.yml` | Manual dispatch | Deploy to staging/production with confirmation |
+
+### Docker Images
+
+Published to GitHub Container Registry (`ghcr.io`):
+
+```
+ghcr.io/<owner>/aegis/ai-engine:<version>
+ghcr.io/<owner>/aegis/demo-crash-service:<version>
+```
+
+### Release Process
+
+```bash
+# 1. Create release tag
+make release-tag v=1.0.0
+
+# 2. CD pipeline builds and pushes images
+# 3. GitHub Release is created with changelog
+# 4. Deploy manually via workflow_dispatch
+```
+
+### Makefile Commands
+
+```bash
+make help              # Show all available commands
+make build             # Build NestJS backend
+make build-cli         # Build CLI tool
+make build-docker      # Build all Docker images
+make quality           # Run lint + typecheck + test
+make dev-safe          # Start full stack
+make release-tag v=1.0.0  # Create release tag
+make clean             # Clean build artifacts
+```
+
+### Dependabot
+
+Automated dependency updates for:
+- npm packages (weekly, Monday 09:00 UTC)
+- GitHub Actions (weekly)
+- Python pip packages (weekly)
+
+### Environment Variables for CI/CD
+
+| Variable | Purpose |
+|---|---|
+| `GITHUB_TOKEN` | Auto-provided, used for GHCR auth |
+| `REGISTRY` | Container registry (default: `ghcr.io`) |
+
+---
+
+## CLI Enhancements
+
+### New Commands (Phase 1-5)
+
+| Command | Purpose |
+|---|---|
+| `aegis containers list` | List monitored containers |
+| `aegis containers inspect <name>` | Container details + crash history |
+| `aegis containers logs <name>` | Recent crash logs |
+| `aegis incidents list` | List recent incidents |
+| `aegis incidents inspect <id>` | Full incident detail |
+| `aegis exclude list` | Show exclusion rules |
+| `aegis exclude add <name>` | Add to exclusion list |
+| `aegis exclude remove <name>` | Remove from exclusion list |
+| `aegis dashboard` | Live terminal dashboard |
+
+### New REST API Endpoints
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/orchestrator/containers/:id/logs` | Container crash logs |
+| `GET /api/orchestrator/incidents/:id` | Full incident detail |
+| `GET /api/orchestrator/remediations/:id` | Full remediation detail |
+| `GET /api/orchestrator/metrics` | Platform analytics |
+| `GET /api/orchestrator/exclusions` | List exclusions |
+| `POST /api/orchestrator/exclusions` | Add runtime exclusion |
+| `DELETE /api/orchestrator/exclusions/:name` | Remove exclusion |
+| `GET /api/docs` | Swagger/OpenAPI documentation |
