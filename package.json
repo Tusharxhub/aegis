@@ -55,7 +55,7 @@
     "@types/dockerode": "^4.0.1",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
-    "@types/node": "^24.0.0",
+    "@types/node": "^26.0.1",
     "@types/supertest": "^7.0.0",
     "concurrently": "^9.1.2",
     "dotenv": "^17.4.2",
