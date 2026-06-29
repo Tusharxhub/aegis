@@ -181,8 +181,13 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
 
     const containerName = raw.Actor.Attributes.name ?? 'unknown';
 
-    // Skip Aegis infrastructure containers
-    if (isIgnoredContainerName(containerName)) {
+    // Skip Aegis infrastructure containers (prefix match, label opt-out, dynamic exclusions)
+    if (
+      isIgnoredContainerName(
+        containerName,
+        raw.Actor.Attributes as Record<string, string>,
+      )
+    ) {
       return;
     }
 

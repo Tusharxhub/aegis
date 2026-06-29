@@ -30,9 +30,13 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     await this.connect().catch((error: unknown) => {
-      this.logger.warn(`[KAFKA] Broker unavailable. Start infrastructure using: npm run infra:up`);
+      this.logger.warn(
+        `[KAFKA] Broker unavailable. Start infrastructure using: npm run infra:up`,
+      );
       this.logger.warn(`[KAFKA] Producer offline`);
-      this.health.setError('Kafka is unreachable. Start infrastructure with npm run infra:up.');
+      this.health.setError(
+        'Kafka is unreachable. Start infrastructure with npm run infra:up.',
+      );
     });
   }
 

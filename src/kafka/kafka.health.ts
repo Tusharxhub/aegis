@@ -2,7 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Kafka } from 'kafkajs';
 import type { KafkaConsumerGroupId } from './kafka.constants.js';
 
-export type ConsumerConnectionState = 'CONNECTED' | 'CONNECTING' | 'RESTARTING' | 'DEGRADED' | 'DISCONNECTED' | 'STOPPING';
+export type ConsumerConnectionState =
+  | 'CONNECTED'
+  | 'CONNECTING'
+  | 'RESTARTING'
+  | 'DEGRADED'
+  | 'DISCONNECTED'
+  | 'STOPPING';
 
 export interface KafkaConsumerHealthState {
   readonly groupId: KafkaConsumerGroupId;
@@ -102,8 +108,10 @@ export class KafkaHealthService {
     restartAttempts?: number,
     lastError?: string,
   ): void {
-    const resolvedState: ConsumerConnectionState = state ?? (connected ? 'CONNECTED' : 'DISCONNECTED');
-    const resolvedRestartAttempts = restartAttempts ?? (this.consumerGroups.get(groupId)?.restartAttempts ?? 0);
+    const resolvedState: ConsumerConnectionState =
+      state ?? (connected ? 'CONNECTED' : 'DISCONNECTED');
+    const resolvedRestartAttempts =
+      restartAttempts ?? this.consumerGroups.get(groupId)?.restartAttempts ?? 0;
     const entry: KafkaConsumerHealthState = {
       groupId,
       connected,
@@ -127,18 +135,20 @@ export class KafkaHealthService {
     this.lastError = message;
   }
 
-  getConsumerGroupState(groupId: KafkaConsumerGroupId): KafkaConsumerHealthState | undefined {
+  getConsumerGroupState(
+    groupId: KafkaConsumerGroupId,
+  ): KafkaConsumerHealthState | undefined {
     return this.consumerGroups.get(groupId);
   }
 
   getOverallConsumerState(): ConsumerConnectionState {
     const states = Array.from(this.consumerGroups.values());
     if (states.length === 0) return 'DISCONNECTED';
-    if (states.some(s => s.state === 'STOPPING')) return 'STOPPING';
-    if (states.every(s => s.state === 'CONNECTED')) return 'CONNECTED';
-    if (states.some(s => s.state === 'RESTARTING')) return 'RESTARTING';
-    if (states.some(s => s.state === 'CONNECTING')) return 'CONNECTING';
-    if (states.some(s => s.state === 'DEGRADED')) return 'DEGRADED';
+    if (states.some((s) => s.state === 'STOPPING')) return 'STOPPING';
+    if (states.every((s) => s.state === 'CONNECTED')) return 'CONNECTED';
+    if (states.some((s) => s.state === 'RESTARTING')) return 'RESTARTING';
+    if (states.some((s) => s.state === 'CONNECTING')) return 'CONNECTING';
+    if (states.some((s) => s.state === 'DEGRADED')) return 'DEGRADED';
     return 'DISCONNECTED';
   }
 

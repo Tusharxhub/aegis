@@ -1,4 +1,10 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 /**
@@ -21,8 +27,12 @@ export class InternalTokenGuard implements CanActivate {
     const token = request.headers['x-aegis-token'] as string | undefined;
 
     if (!token || token !== this.expectedToken) {
-      this.logger.warn(`Unauthorized request to ${request.method} ${request.url}`);
-      throw new UnauthorizedException('Invalid or missing x-aegis-token header.');
+      this.logger.warn(
+        `Unauthorized request to ${request.method} ${request.url}`,
+      );
+      throw new UnauthorizedException(
+        'Invalid or missing x-aegis-token header.',
+      );
     }
 
     return true;

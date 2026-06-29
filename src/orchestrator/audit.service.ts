@@ -25,26 +25,107 @@ export class AuditService {
     exitCode?: number,
   ) {
     try {
+      const setFields: Record<string, unknown> = {
+        status,
+        exitCode: exitCode ?? null,
+        lastSeenAt: new Date(),
+      };
+
+      const setOnInsert: Record<string, unknown> = {
+        name,
+        imageName,
+        restartCount: 0,
+        lastRemediationAt: null,
+        totalCrashCount: 0,
+        monitoringEnabled: true,
+      };
+
+      const update: Record<string, unknown> = {
+        $set: setFields,
+        $setOnInsert: setOnInsert,
+      };
+
+      // Track crash count and last crash time
+      if (status === ServiceStatus.CRASHED) {
+        update.$inc = { totalCrashCount: 1 };
+        setFields.lastCrashAt = new Date();
+      }
+
       return await this.mongoService.ServiceModel.findOneAndUpdate(
         { containerId },
-        {
-          $set: {
-            status,
-            exitCode: exitCode ?? null,
-            lastSeenAt: new Date(),
-          },
-          $setOnInsert: {
-            name,
-            imageName,
-            restartCount: 0,
-          },
-        },
+        update,
         { upsert: true, returnDocument: 'after' },
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Failed to upsert service ${name} in MongoDB: ${msg}`);
       throw err;
+    }
+  }
+
+  /**
+   * Increment the restart count for a service and update lastRemediationAt.
+   */
+  async incrementRestartCount(containerId: string): Promise<void> {
+    try {
+      await this.mongoService.ServiceModel.findOneAndUpdate(
+        { containerId },
+        {
+          $inc: { restartCount: 1 },
+          $set: { lastRemediationAt: new Date() },
+        },
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Failed to increment restart count for ${containerId}: ${msg}`,
+      );
+    }
+  }
+
+  /**
+   * Get the number of restarts for a container within a time window (ms).
+   */
+  async getRestartCount(
+    containerId: string,
+    windowMs: number,
+  ): Promise<number> {
+    try {
+      const since = new Date(Date.now() - windowMs);
+      const doc = await this.mongoService.ServiceModel.findOne({ containerId })
+        .select('restartCount lastRemediationAt')
+        .lean()
+        .exec();
+
+      if (!doc || !doc.lastRemediationAt) return 0;
+      if (doc.lastRemediationAt < since) return 0;
+      return doc.restartCount ?? 0;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Failed to get restart count for ${containerId}: ${msg}`,
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * Update service status directly.
+   */
+  async updateServiceStatus(
+    containerId: string,
+    status: ServiceStatus,
+  ): Promise<void> {
+    try {
+      await this.mongoService.ServiceModel.findOneAndUpdate(
+        { containerId },
+        { $set: { status, lastSeenAt: new Date() } },
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Failed to update service status for ${containerId}: ${msg}`,
+      );
     }
   }
 
@@ -217,6 +298,43 @@ export class AuditService {
         `Failed to retrieve latest event for service ${serviceId}: ${msg}`,
       );
       return null;
+    }
+  }
+
+  /**
+   * Get a service document by container ID.
+   */
+  async getServiceByContainerId(containerId: string) {
+    try {
+      return await this.mongoService.ServiceModel.findOne({ containerId })
+        .lean()
+        .exec();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Failed to get service for ${containerId}: ${msg}`);
+      return null;
+    }
+  }
+
+  /**
+   * Get the number of crash events for a service within a time window.
+   */
+  async getRecentCrashCount(
+    serviceId: string,
+    windowMs: number,
+  ): Promise<number> {
+    try {
+      const since = new Date(Date.now() - windowMs);
+      return await this.mongoService.EventModel.countDocuments({
+        service: serviceId,
+        timestamp: { $gte: since },
+      }).exec();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Failed to get recent crash count for ${serviceId}: ${msg}`,
+      );
+      return 0;
     }
   }
 }

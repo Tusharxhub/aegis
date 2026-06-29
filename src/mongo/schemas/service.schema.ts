@@ -8,6 +8,13 @@ export interface IService {
   status: 'HEALTHY' | 'DEGRADED' | 'CRASHED' | 'RESTARTING' | 'UNKNOWN';
   exitCode?: number | null;
   restartCount: number;
+  lastRemediationAt: Date | null;
+  lastCrashAt: Date | null;
+  totalCrashCount: number;
+  owner?: string;
+  tags?: string[];
+  maxRestartsPerHour?: number;
+  monitoringEnabled: boolean;
   lastSeenAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -25,6 +32,13 @@ export const ServiceSchema = new Schema<IService>(
     },
     exitCode: { type: Number, default: null },
     restartCount: { type: Number, default: 0 },
+    lastRemediationAt: { type: Date, default: null },
+    lastCrashAt: { type: Date, default: null },
+    totalCrashCount: { type: Number, default: 0 },
+    owner: { type: String, default: null },
+    tags: { type: [String], default: [] },
+    maxRestartsPerHour: { type: Number, default: null },
+    monitoringEnabled: { type: Boolean, default: true },
     lastSeenAt: { type: Date, default: Date.now },
   },
   {

@@ -125,10 +125,7 @@ export class MongoService implements OnModuleInit, OnModuleDestroy {
       'MetricsSnapshot',
       MetricsSnapshotSchema,
     );
-    this.OutboxModel = this.connection.model(
-      'OutboxEvent',
-      OutboxEventSchema,
-    );
+    this.OutboxModel = this.connection.model('OutboxEvent', OutboxEventSchema);
 
     this.logger.log('Mongoose schemas compiled and models initialized.');
   }

@@ -17,7 +17,10 @@ export class KafkaConfigService {
         'KAFKA_BROKER is not configured. Set KAFKA_BROKER=localhost:9092 for local development.',
       );
     }
-    const brokers = configured.split(',').map((broker) => broker.trim()).filter(Boolean);
+    const brokers = configured
+      .split(',')
+      .map((broker) => broker.trim())
+      .filter(Boolean);
     if (brokers.length === 0) {
       throw new Error('KAFKA_BROKER is configured but empty.');
     }
@@ -25,26 +28,48 @@ export class KafkaConfigService {
   }
 
   getClientId(): string {
-    return this.configService.get<string>('KAFKA_CLIENT_ID') ?? 'aegis-orchestrator';
+    return (
+      this.configService.get<string>('KAFKA_CLIENT_ID') ?? 'aegis-orchestrator'
+    );
   }
 
-  getConnectionRetryLimit(): number { return this.parsePositiveInteger('KAFKA_CONNECTION_RETRIES', 5); }
-  getConsumerRetryLimit(): number { return this.parsePositiveInteger('KAFKA_CONSUMER_RETRIES', 5); }
+  getConnectionRetryLimit(): number {
+    return this.parsePositiveInteger('KAFKA_CONNECTION_RETRIES', 5);
+  }
+  getConsumerRetryLimit(): number {
+    return this.parsePositiveInteger('KAFKA_CONSUMER_RETRIES', 5);
+  }
 
   getProducerRetryLimit(): number {
     const configured = this.configService.get<string>('KAFKA_PRODUCER_RETRIES');
     if (!configured?.trim()) return Number.MAX_SAFE_INTEGER;
     const parsed = Number.parseInt(configured, 10);
-    if (!Number.isFinite(parsed) || parsed <= 0) throw new Error('KAFKA_PRODUCER_RETRIES must be a positive integer.');
+    if (!Number.isFinite(parsed) || parsed <= 0)
+      throw new Error('KAFKA_PRODUCER_RETRIES must be a positive integer.');
     return parsed;
   }
 
-  getProducerMaxInFlightRequests(): number { return this.parsePositiveInteger('KAFKA_PRODUCER_MAX_IN_FLIGHT_REQUESTS', 1); }
-  getInitialRetryTimeMs(): number { return this.parsePositiveInteger('KAFKA_INITIAL_RETRY_TIME_MS', 300); }
-  getConnectionTimeoutMs(): number { return this.parsePositiveInteger('KAFKA_CONNECTION_TIMEOUT_MS', 10_000); }
-  getRequestTimeoutMs(): number { return this.parsePositiveInteger('KAFKA_REQUEST_TIMEOUT_MS', 30_000); }
-  isSslEnabled(): boolean { return parseBoolean(this.configService.get<string>('KAFKA_SSL'), false); }
-  getEnvironmentLabel(): string { return this.configService.get<string>('NODE_ENV') ?? 'development'; }
+  getProducerMaxInFlightRequests(): number {
+    return this.parsePositiveInteger(
+      'KAFKA_PRODUCER_MAX_IN_FLIGHT_REQUESTS',
+      1,
+    );
+  }
+  getInitialRetryTimeMs(): number {
+    return this.parsePositiveInteger('KAFKA_INITIAL_RETRY_TIME_MS', 300);
+  }
+  getConnectionTimeoutMs(): number {
+    return this.parsePositiveInteger('KAFKA_CONNECTION_TIMEOUT_MS', 10_000);
+  }
+  getRequestTimeoutMs(): number {
+    return this.parsePositiveInteger('KAFKA_REQUEST_TIMEOUT_MS', 30_000);
+  }
+  isSslEnabled(): boolean {
+    return parseBoolean(this.configService.get<string>('KAFKA_SSL'), false);
+  }
+  getEnvironmentLabel(): string {
+    return this.configService.get<string>('NODE_ENV') ?? 'development';
+  }
 
   getDiagnostics() {
     return {
@@ -62,13 +87,27 @@ export class KafkaConfigService {
     };
   }
 
-  getRestartInitialDelayMs(): number { return this.parsePositiveInteger('KAFKA_RESTART_INITIAL_DELAY_MS', 1000); }
-  getRestartMaxDelayMs(): number { return this.parsePositiveInteger('KAFKA_RESTART_MAX_DELAY_MS', 30_000); }
+  getRestartInitialDelayMs(): number {
+    return this.parsePositiveInteger('KAFKA_RESTART_INITIAL_DELAY_MS', 1000);
+  }
+  getRestartMaxDelayMs(): number {
+    return this.parsePositiveInteger('KAFKA_RESTART_MAX_DELAY_MS', 30_000);
+  }
   getRestartMaxAttempts(): number {
-    const configured = this.configService.get<string>('KAFKA_RESTART_MAX_ATTEMPTS');
-    if (configured === undefined || configured === null || configured.trim() === '') return 0;
+    const configured = this.configService.get<string>(
+      'KAFKA_RESTART_MAX_ATTEMPTS',
+    );
+    if (
+      configured === undefined ||
+      configured === null ||
+      configured.trim() === ''
+    )
+      return 0;
     const parsed = Number.parseInt(configured, 10);
-    if (!Number.isFinite(parsed) || parsed < 0) throw new Error('KAFKA_RESTART_MAX_ATTEMPTS must be a non-negative integer (0 = unlimited).');
+    if (!Number.isFinite(parsed) || parsed < 0)
+      throw new Error(
+        'KAFKA_RESTART_MAX_ATTEMPTS must be a non-negative integer (0 = unlimited).',
+      );
     return parsed;
   }
 
@@ -76,7 +115,8 @@ export class KafkaConfigService {
     const rawValue = this.configService.get<string>(key);
     if (!rawValue?.trim()) return fallback;
     const parsed = Number.parseInt(rawValue, 10);
-    if (!Number.isFinite(parsed) || parsed <= 0) throw new Error(`${key} must be a positive integer.`);
+    if (!Number.isFinite(parsed) || parsed <= 0)
+      throw new Error(`${key} must be a positive integer.`);
     return parsed;
   }
 }

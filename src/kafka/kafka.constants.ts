@@ -15,7 +15,7 @@ export const KAFKA_TOPICS = {
   RL_FEEDBACK: 'aegis.rl.feedback',
 } as const;
 
-export type KafkaTopic = typeof KAFKA_TOPICS[keyof typeof KAFKA_TOPICS];
+export type KafkaTopic = (typeof KAFKA_TOPICS)[keyof typeof KAFKA_TOPICS];
 
 /**
  * Consumer groups — each represents an isolated processing boundary.
@@ -32,9 +32,13 @@ export const KAFKA_CONSUMER_GROUPS = {
   AUDIT: 'aegis-audit-group',
 } as const;
 
-export type KafkaConsumerGroupId = typeof KAFKA_CONSUMER_GROUPS[keyof typeof KAFKA_CONSUMER_GROUPS];
+export type KafkaConsumerGroupId =
+  (typeof KAFKA_CONSUMER_GROUPS)[keyof typeof KAFKA_CONSUMER_GROUPS];
 
-export const KAFKA_CONSUMER_SUBSCRIPTIONS: Record<KafkaConsumerGroupId, readonly KafkaTopic[]> = {
+export const KAFKA_CONSUMER_SUBSCRIPTIONS: Record<
+  KafkaConsumerGroupId,
+  readonly KafkaTopic[]
+> = {
   [KAFKA_CONSUMER_GROUPS.WATCHMAN]: [
     KAFKA_TOPICS.CONTAINER_EVENTS,
     KAFKA_TOPICS.INCIDENT_DETECTED,

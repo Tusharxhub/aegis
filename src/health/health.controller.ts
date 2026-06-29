@@ -32,7 +32,8 @@ export class HealthController {
   health() {
     const kafka = this.kafkaProducer.getHealthSnapshot();
     const aiAvailable = this.aiAgent.isAiEngineAvailable();
-    const kafkaHealthy = kafka.producerConnected && kafka.consumerState === 'CONNECTED';
+    const kafkaHealthy =
+      kafka.producerConnected && kafka.consumerState === 'CONNECTED';
 
     // Determine overall status
     let status: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
@@ -45,7 +46,9 @@ export class HealthController {
 
     if (!kafkaHealthy) {
       status = 'degraded';
-      degradedReasons.push(`Kafka ${kafka.consumerState === 'RESTARTING' ? 'recovering' : 'unavailable'}`);
+      degradedReasons.push(
+        `Kafka ${kafka.consumerState === 'RESTARTING' ? 'recovering' : 'unavailable'}`,
+      );
     }
 
     return {
@@ -61,7 +64,12 @@ export class HealthController {
       ai: {
         engineAvailable: aiAvailable,
         mode: aiAvailable ? 'live' : 'fallback',
-        ...(aiAvailable ? {} : { warning: 'AI engine is offline — only safe fallback diagnosis is active. Automatic remediation is disabled.' }),
+        ...(aiAvailable
+          ? {}
+          : {
+              warning:
+                'AI engine is offline — only safe fallback diagnosis is active. Automatic remediation is disabled.',
+            }),
       },
       ...(degradedReasons.length > 0 ? { degradedReasons } : {}),
       timestamp: new Date().toISOString(),

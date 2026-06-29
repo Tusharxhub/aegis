@@ -217,7 +217,9 @@ export function serializeAegisEvent<TPayload extends Record<string, unknown>>(
   return JSON.stringify(normalizeAegisValue(event));
 }
 
-export function isKafkaEventEnvelope(value: unknown): value is KafkaEventEnvelope {
+export function isKafkaEventEnvelope(
+  value: unknown,
+): value is KafkaEventEnvelope {
   return (
     isRecord(value) &&
     hasString(value, 'eventId') &&
@@ -229,7 +231,9 @@ export function isKafkaEventEnvelope(value: unknown): value is KafkaEventEnvelop
   );
 }
 
-export function isContainerEventPayload(value: unknown): value is ContainerEventPayload {
+export function isContainerEventPayload(
+  value: unknown,
+): value is ContainerEventPayload {
   return (
     isRecord(value) &&
     hasString(value, 'eventId') &&
@@ -243,7 +247,9 @@ export function isContainerEventPayload(value: unknown): value is ContainerEvent
   );
 }
 
-export function isIncidentDetectedPayload(value: unknown): value is IncidentDetectedPayload {
+export function isIncidentDetectedPayload(
+  value: unknown,
+): value is IncidentDetectedPayload {
   return (
     isRecord(value) &&
     hasString(value, 'eventId') &&
@@ -258,7 +264,9 @@ export function isIncidentDetectedPayload(value: unknown): value is IncidentDete
   );
 }
 
-export function isLogsExtractedPayload(value: unknown): value is LogsExtractedPayload {
+export function isLogsExtractedPayload(
+  value: unknown,
+): value is LogsExtractedPayload {
   return (
     isRecord(value) &&
     hasString(value, 'eventId') &&
@@ -270,7 +278,9 @@ export function isLogsExtractedPayload(value: unknown): value is LogsExtractedPa
   );
 }
 
-export function isAiDiagnosisCompletedPayload(value: unknown): value is AiDiagnosisCompletedPayload {
+export function isAiDiagnosisCompletedPayload(
+  value: unknown,
+): value is AiDiagnosisCompletedPayload {
   return (
     isRecord(value) &&
     hasString(value, 'eventId') &&
@@ -286,7 +296,9 @@ export function isAiDiagnosisCompletedPayload(value: unknown): value is AiDiagno
   );
 }
 
-export function isRemediationStartedPayload(value: unknown): value is RemediationStartedPayload {
+export function isRemediationStartedPayload(
+  value: unknown,
+): value is RemediationStartedPayload {
   return (
     isRecord(value) &&
     hasString(value, 'eventId') &&
@@ -302,7 +314,9 @@ export function isRemediationStartedPayload(value: unknown): value is Remediatio
   );
 }
 
-export function isRemediationCompletedPayload(value: unknown): value is RemediationCompletedPayload {
+export function isRemediationCompletedPayload(
+  value: unknown,
+): value is RemediationCompletedPayload {
   return (
     isRecord(value) &&
     hasString(value, 'eventId') &&
@@ -317,7 +331,9 @@ export function isRemediationCompletedPayload(value: unknown): value is Remediat
   );
 }
 
-export function isRlFeedbackPayload(value: unknown): value is RlFeedbackPayload {
+export function isRlFeedbackPayload(
+  value: unknown,
+): value is RlFeedbackPayload {
   return (
     isRecord(value) &&
     hasString(value, 'feedbackId') &&
@@ -332,7 +348,9 @@ export function isRlFeedbackPayload(value: unknown): value is RlFeedbackPayload 
   );
 }
 
-export function isAuditEventPayload(value: unknown): value is AuditEventPayload {
+export function isAuditEventPayload(
+  value: unknown,
+): value is AuditEventPayload {
   return (
     isRecord(value) &&
     hasString(value, 'auditId') &&

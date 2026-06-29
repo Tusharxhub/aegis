@@ -2,7 +2,10 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { randomUUID } from 'crypto';
 import { DockerService } from '../docker/docker.service.js';
-import { AiAgentService, type DiagnoseResponse } from '../ai-agent/ai-agent.service.js';
+import {
+  AiAgentService,
+  type DiagnoseResponse,
+} from '../ai-agent/ai-agent.service.js';
 import { AuditService } from './audit.service.js';
 import { OutboxService } from './outbox.service.js';
 import { KafkaProducerService } from '../kafka/kafka.producer.js';
@@ -15,7 +18,10 @@ import {
   ActionType,
   RiskLevel,
 } from '../common/interfaces/db-types.js';
-import { DEFAULT_CONFIDENCE_THRESHOLD } from '../common/constants/index.js';
+import {
+  DEFAULT_CONFIDENCE_THRESHOLD,
+  MAX_RESTARTS_PER_HOUR,
+} from '../common/constants/index.js';
 import type { DockerCrashEvent } from '../common/interfaces/docker-event.interface.js';
 
 /**
@@ -44,7 +50,9 @@ export class OrchestratorService implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    this.logger.log('Orchestrator online — Kafka-native event processing active.');
+    this.logger.log(
+      'Orchestrator online — Kafka-native event processing active.',
+    );
   }
 
   /**
@@ -83,7 +91,9 @@ export class OrchestratorService implements OnModuleInit {
       serviceId = service?._id?.toString() ?? null;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`[${correlationId}] Failed to upsert service in MongoDB: ${message}`);
+      this.logger.error(
+        `[${correlationId}] Failed to upsert service in MongoDB: ${message}`,
+      );
     }
 
     try {
@@ -97,7 +107,9 @@ export class OrchestratorService implements OnModuleInit {
       eventId = eventRecord?._id?.toString() ?? correlationId;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`[${correlationId}] Failed to persist crash event in MongoDB: ${message}`);
+      this.logger.error(
+        `[${correlationId}] Failed to persist crash event in MongoDB: ${message}`,
+      );
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -123,20 +135,26 @@ export class OrchestratorService implements OnModuleInit {
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`[${correlationId}] Kafka publish failed for INCIDENT_DETECTED. Incident preserved in outbox for later delivery: ${message}`);
+      this.logger.warn(
+        `[${correlationId}] Kafka publish failed for INCIDENT_DETECTED. Incident preserved in outbox for later delivery: ${message}`,
+      );
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Step 3: AI Diagnosis (with fallback tracking)
     // ─────────────────────────────────────────────────────────────────────────
-    this.logger.log(`[${correlationId}] Sending logs to AI Engine for analysis...`);
+    this.logger.log(
+      `[${correlationId}] Sending logs to AI Engine for analysis...`,
+    );
     const diagnosis = await this.aiAgent.diagnoseLogs(event.logs);
 
     // Track whether this was a fallback (AI unavailable)
     const isFallbackDiagnosis = diagnosis.aiEngineAvailable === false;
 
     if (isFallbackDiagnosis) {
-      this.logger.warn(`[${correlationId}] AI Engine unavailable — using safe fallback diagnosis. Incident marked for operator review.`);
+      this.logger.warn(
+        `[${correlationId}] AI Engine unavailable — using safe fallback diagnosis. Incident marked for operator review.`,
+      );
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -151,7 +169,9 @@ export class OrchestratorService implements OnModuleInit {
         );
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        this.logger.warn(`[${correlationId}] Failed to persist embedding: ${message}`);
+        this.logger.warn(
+          `[${correlationId}] Failed to persist embedding: ${message}`,
+        );
       }
     }
 
@@ -171,7 +191,9 @@ export class OrchestratorService implements OnModuleInit {
       planId = plan?._id?.toString() ?? correlationId;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`[${correlationId}] Failed to persist remediation plan: ${message}`);
+      this.logger.error(
+        `[${correlationId}] Failed to persist remediation plan: ${message}`,
+      );
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -201,7 +223,9 @@ export class OrchestratorService implements OnModuleInit {
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`[${correlationId}] Kafka publish failed for AI_DIAGNOSIS_COMPLETED. Event preserved in outbox: ${message}`);
+      this.logger.warn(
+        `[${correlationId}] Kafka publish failed for AI_DIAGNOSIS_COMPLETED. Event preserved in outbox: ${message}`,
+      );
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -219,7 +243,8 @@ export class OrchestratorService implements OnModuleInit {
             entityId: eventId,
             action: 'AI_FALLBACK_USED',
             status: 'DEGRADED',
-            summary: 'AI engine was unavailable. Fallback diagnosis used. Incident marked for operator review.',
+            summary:
+              'AI engine was unavailable. Fallback diagnosis used. Incident marked for operator review.',
             recordedAt: new Date().toISOString(),
             details: {
               containerName: event.containerName,
@@ -231,16 +256,26 @@ export class OrchestratorService implements OnModuleInit {
         });
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        this.logger.warn(`[${correlationId}] Failed to emit AI degraded-status event: ${message}`);
+        this.logger.warn(
+          `[${correlationId}] Failed to emit AI degraded-status event: ${message}`,
+        );
       }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Step 8: Execute remediation (with safety checks)
+    // Step 8: Execute remediation (with safety checks + circuit breaker)
     //         Never bypass 0.85 confidence threshold.
     //         Never treat fallback as a successful diagnosis.
     // ─────────────────────────────────────────────────────────────────────────
-    await this.executeRemediation(event, diagnosis, planId, eventId, correlationId, startTime, isFallbackDiagnosis);
+    await this.executeRemediation(
+      event,
+      diagnosis,
+      planId,
+      eventId,
+      correlationId,
+      startTime,
+      isFallbackDiagnosis,
+    );
   }
 
   private async executeRemediation(
@@ -256,6 +291,138 @@ export class OrchestratorService implements OnModuleInit {
     const confidence = diagnosis.confidenceScore;
     const riskLevel = diagnosis.riskLevel;
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Circuit breaker: check restart count and cooldown
+    // ─────────────────────────────────────────────────────────────────────────
+    const recentRestarts = await this.auditService.getRestartCount(
+      event.containerId,
+      3_600_000, // 1 hour window
+    );
+
+    if (recentRestarts >= MAX_RESTARTS_PER_HOUR) {
+      this.logger.warn(
+        `[${correlationId}] Circuit breaker TRIPPED for [${event.containerName}] — ${recentRestarts} restarts in the last hour (limit: ${MAX_RESTARTS_PER_HOUR}). Remediation blocked.`,
+      );
+
+      try {
+        await this.auditService.updatePlanStatus(
+          planId,
+          RemediationStatus.SKIPPED,
+        );
+      } catch {
+        /* swallow */
+      }
+
+      try {
+        await this.outbox.storeAndPublish(KAFKA_TOPICS.AUDIT_EVENTS, {
+          eventType: 'CIRCUIT_BREAKER_TRIPPED',
+          source: 'audit-service',
+          correlationId,
+          payload: {
+            auditId: randomUUID(),
+            entityType: 'service',
+            entityId: event.containerId,
+            action: 'CIRCUIT_BREAKER',
+            status: 'BLOCKED',
+            summary: `Circuit breaker tripped: ${recentRestarts} restarts in 1 hour for ${event.containerName}`,
+            recordedAt: new Date().toISOString(),
+            details: {
+              containerName: event.containerName,
+              containerId: event.containerId,
+              restartCount: recentRestarts,
+              maxRestartsPerHour: MAX_RESTARTS_PER_HOUR,
+            },
+          },
+        });
+      } catch {
+        /* swallow */
+      }
+
+      await this.publishRemediationCompleted(
+        event,
+        action,
+        planId,
+        randomUUID(),
+        correlationId,
+        false,
+        'Circuit breaker tripped',
+        Date.now() - pipelineStartTime,
+      );
+      return;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Per-container policy: check if monitoring is enabled and apply overrides
+    // ─────────────────────────────────────────────────────────────────────────
+    const serviceDoc = await this.auditService.getServiceByContainerId(
+      event.containerId,
+    );
+    if (serviceDoc && serviceDoc.monitoringEnabled === false) {
+      this.logger.log(
+        `[${correlationId}] Monitoring disabled for [${event.containerName}] — skipping remediation.`,
+      );
+      try {
+        await this.auditService.updatePlanStatus(
+          planId,
+          RemediationStatus.SKIPPED,
+        );
+      } catch {
+        /* swallow */
+      }
+      await this.publishRemediationCompleted(
+        event,
+        action,
+        planId,
+        randomUUID(),
+        correlationId,
+        false,
+        'Monitoring disabled',
+        Date.now() - pipelineStartTime,
+      );
+      return;
+    }
+
+    // Use per-container confidence threshold if set, otherwise default
+    // Per-container overrides can be extended here in the future
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Incident correlation: check if this container has identical recent crashes
+    // ─────────────────────────────────────────────────────────────────────────
+    const recentCrashCount = await this.auditService.getRecentCrashCount(
+      serviceDoc?._id?.toString() ?? event.containerId,
+      3_600_000, // last hour
+    );
+
+    if (recentCrashCount >= 3) {
+      this.logger.warn(
+        `[${correlationId}] Pattern detected: ${recentCrashCount} crashes in 1 hour for [${event.containerName}]. Escalating to operator.`,
+      );
+
+      try {
+        await this.outbox.storeAndPublish(KAFKA_TOPICS.AUDIT_EVENTS, {
+          eventType: 'REPEATED_CRASH_ESCALATION',
+          source: 'audit-service',
+          correlationId,
+          payload: {
+            auditId: randomUUID(),
+            entityType: 'service',
+            entityId: event.containerId,
+            action: 'ESCALATE',
+            status: 'ESCALATED',
+            summary: `Repeated crashes (${recentCrashCount}/hour) for ${event.containerName}. Manual review recommended.`,
+            recordedAt: new Date().toISOString(),
+            details: {
+              containerName: event.containerName,
+              containerId: event.containerId,
+              recentCrashCount,
+            },
+          },
+        });
+      } catch {
+        /* swallow */
+      }
+    }
+
     // Safety gate: only execute if confidence meets threshold, risk is LOW, and action is RESTART
     // Never bypass the 0.85 safety threshold
     // Never execute remediation on fallback diagnosis
@@ -266,7 +433,7 @@ export class OrchestratorService implements OnModuleInit {
       action === 'RESTART_CONTAINER';
 
     this.logger.log(
-      `[${correlationId}] Safety check: action=${action} confidence=${confidence.toFixed(2)} risk=${riskLevel} fallback=${isFallbackDiagnosis} pass=${safetyPassed}`,
+      `[${correlationId}] Safety check: action=${action} confidence=${confidence.toFixed(2)} risk=${riskLevel} fallback=${isFallbackDiagnosis} pass=${safetyPassed} recentRestarts=${recentRestarts}`,
     );
 
     // Publish remediation started via outbox (isolated)
@@ -291,7 +458,9 @@ export class OrchestratorService implements OnModuleInit {
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`[${correlationId}] Kafka publish failed for REMEDIATION_STARTED: ${message}`);
+      this.logger.warn(
+        `[${correlationId}] Kafka publish failed for REMEDIATION_STARTED: ${message}`,
+      );
     }
 
     if (!safetyPassed) {
@@ -304,8 +473,24 @@ export class OrchestratorService implements OnModuleInit {
       );
 
       // Persist skip status (isolated)
-      try { await this.auditService.updatePlanStatus(planId, RemediationStatus.SKIPPED); } catch { /* swallow */ }
-      await this.publishRemediationCompleted(event, action, planId, executionId, correlationId, false, skipReason, Date.now() - pipelineStartTime);
+      try {
+        await this.auditService.updatePlanStatus(
+          planId,
+          RemediationStatus.SKIPPED,
+        );
+      } catch {
+        /* swallow */
+      }
+      await this.publishRemediationCompleted(
+        event,
+        action,
+        planId,
+        executionId,
+        correlationId,
+        false,
+        skipReason,
+        Date.now() - pipelineStartTime,
+      );
       return;
     }
 
@@ -316,7 +501,14 @@ export class OrchestratorService implements OnModuleInit {
 
     try {
       // Update plan status (isolated)
-      try { await this.auditService.updatePlanStatus(planId, RemediationStatus.EXECUTING); } catch { /* swallow */ }
+      try {
+        await this.auditService.updatePlanStatus(
+          planId,
+          RemediationStatus.EXECUTING,
+        );
+      } catch {
+        /* swallow */
+      }
 
       if (action === 'RESTART_CONTAINER') {
         await this.dockerService.restartContainer(event.containerId);
@@ -326,15 +518,19 @@ export class OrchestratorService implements OnModuleInit {
         executionLogs = `Container [${event.containerName}] — STOP action acknowledged. Manual intervention recommended.`;
         success = true;
       } else {
-        executionLogs = `Action ${action} — no automatic remediation performed.`;
+        executionLogs = `Action ${String(action)} — no automatic remediation performed.`;
         success = true;
       }
 
-      this.logger.log(`[${correlationId}] Remediation ${success ? 'succeeded' : 'failed'} for [${event.containerName}]`);
+      this.logger.log(
+        `[${correlationId}] Remediation ${success ? 'succeeded' : 'failed'} for [${event.containerName}]`,
+      );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       executionLogs = `Remediation failed: ${message}`;
-      this.logger.error(`[${correlationId}] Remediation execution error: ${message}`);
+      this.logger.error(
+        `[${correlationId}] Remediation execution error: ${message}`,
+      );
     }
 
     const durationMs = Date.now() - actionStart;
@@ -351,7 +547,9 @@ export class OrchestratorService implements OnModuleInit {
       );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`[${correlationId}] Failed to persist action execution: ${message}`);
+      this.logger.warn(
+        `[${correlationId}] Failed to persist action execution: ${message}`,
+      );
     }
 
     try {
@@ -362,10 +560,12 @@ export class OrchestratorService implements OnModuleInit {
       );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`[${correlationId}] Failed to update plan status: ${message}`);
+      this.logger.warn(
+        `[${correlationId}] Failed to update plan status: ${message}`,
+      );
     }
 
-    // Update service status (isolated)
+    // Update service status and increment restart count (isolated)
     if (success && action === 'RESTART_CONTAINER') {
       try {
         await this.auditService.upsertService(
@@ -376,11 +576,30 @@ export class OrchestratorService implements OnModuleInit {
         );
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        this.logger.warn(`[${correlationId}] Failed to update service status: ${message}`);
+        this.logger.warn(
+          `[${correlationId}] Failed to update service status: ${message}`,
+        );
+      }
+      try {
+        await this.auditService.incrementRestartCount(event.containerId);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(
+          `[${correlationId}] Failed to increment restart count: ${message}`,
+        );
       }
     }
 
-    await this.publishRemediationCompleted(event, action, planId, executionId, correlationId, success, executionLogs, durationMs);
+    await this.publishRemediationCompleted(
+      event,
+      action,
+      planId,
+      executionId,
+      correlationId,
+      success,
+      executionLogs,
+      durationMs,
+    );
   }
 
   private async publishRemediationCompleted(
@@ -413,7 +632,9 @@ export class OrchestratorService implements OnModuleInit {
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`[${correlationId}] Kafka publish failed for REMEDIATION_COMPLETED. Event preserved in outbox: ${message}`);
+      this.logger.warn(
+        `[${correlationId}] Kafka publish failed for REMEDIATION_COMPLETED. Event preserved in outbox: ${message}`,
+      );
     }
   }
 }

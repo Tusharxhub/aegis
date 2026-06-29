@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import helmet from 'helmet';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module.js';
 import { KafkaHealthService } from './kafka/kafka.health.js';
 
@@ -30,6 +31,22 @@ async function bootstrap(): Promise<void> {
     exclude: ['/'],
   });
 
+  // Swagger / OpenAPI documentation
+  const config = new DocumentBuilder()
+    .setTitle('Project Aegis API')
+    .setDescription('Kafka-native AIOps self-healing infrastructure platform')
+    .setVersion('1.0')
+    .addTag('containers', 'Container monitoring and management')
+    .addTag('incidents', 'Crash incident tracking')
+    .addTag('remediations', 'Remediation plan management')
+    .addTag('health', 'Platform health checks')
+    .addTag('metrics', 'Platform metrics and analytics')
+    .addTag('exclusions', 'Container exclusion management')
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
+
   // Graceful shutdown — allows Kafka consumers, outbox, and Mongo to disconnect cleanly
   app.enableShutdownHooks();
 
@@ -57,6 +74,7 @@ async function bootstrap(): Promise<void> {
     '║     PROJECT AEGIS — Kafka-Native AIOps Control Plane                   ║',
     '║                                                                        ║',
     `║   Control Plane:  http://0.0.0.0:${port}                               ║`,
+    `║   Swagger Docs:   http://0.0.0.0:${port}/api/docs                     ║`,
     `║   Environment:    ${(process.env.NODE_ENV ?? 'development').padEnd(30)}║`,
     '║   Mode:           headless backend (no frontend)                       ║',
     '║                                                                        ║',

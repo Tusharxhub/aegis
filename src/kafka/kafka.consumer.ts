@@ -1,9 +1,27 @@
-import { Injectable, Logger, OnApplicationShutdown, OnModuleInit } from '@nestjs/common';
-import { Kafka, logLevel, type Consumer, type EachMessagePayload } from 'kafkajs';
-import { KAFKA_CONSUMER_SUBSCRIPTIONS, type KafkaConsumerGroupId, type KafkaTopic } from './kafka.constants.js';
+import {
+  Injectable,
+  Logger,
+  OnApplicationShutdown,
+  OnModuleInit,
+} from '@nestjs/common';
+import {
+  Kafka,
+  logLevel,
+  type Consumer,
+  type EachMessagePayload,
+} from 'kafkajs';
+import {
+  KAFKA_CONSUMER_SUBSCRIPTIONS,
+  type KafkaConsumerGroupId,
+  type KafkaTopic,
+} from './kafka.constants.js';
 import { KafkaConfigService } from './kafka.config.js';
 import { KafkaHealthService } from './kafka.health.js';
-import { isKafkaEventEnvelope, isTopicPayload, type KafkaEventEnvelope } from './kafka.types.js';
+import {
+  isKafkaEventEnvelope,
+  isTopicPayload,
+  type KafkaEventEnvelope,
+} from './kafka.types.js';
 
 /**
  * Supervised Kafka consumer lifecycle.
@@ -18,7 +36,9 @@ import { isKafkaEventEnvelope, isTopicPayload, type KafkaEventEnvelope } from '.
  * configured limit, and is prevented after intentional shutdown.
  */
 @Injectable()
-export class KafkaConsumerService implements OnModuleInit, OnApplicationShutdown {
+export class KafkaConsumerService
+  implements OnModuleInit, OnApplicationShutdown
+{
   private readonly logger = new Logger(KafkaConsumerService.name);
   private kafka: Kafka | null = null;
   private consumers = new Map<KafkaConsumerGroupId, Consumer>();
@@ -28,18 +48,27 @@ export class KafkaConsumerService implements OnModuleInit, OnApplicationShutdown
   /** Tracks whether a restart supervisor loop is already running per group. */
   private restartingGroups = new Set<KafkaConsumerGroupId>();
 
-  constructor(private readonly kafkaConfig: KafkaConfigService, private readonly health: KafkaHealthService) {}
+  constructor(
+    private readonly kafkaConfig: KafkaConfigService,
+    private readonly health: KafkaHealthService,
+  ) {}
 
   async onModuleInit(): Promise<void> {
-    try { await this.start(); } catch (error: unknown) {
+    try {
+      await this.start();
+    } catch (error: unknown) {
       this.logger.warn(`[KAFKA] Consumers offline — will attempt recovery`);
-      this.health.setError('Kafka is unreachable. Start infrastructure with npm run infra:up.');
+      this.health.setError(
+        'Kafka is unreachable. Start infrastructure with npm run infra:up.',
+      );
       // Kick off recovery for each consumer group even if initial start fails
       this.startAllSupervisors();
     }
   }
 
-  async onApplicationShutdown(): Promise<void> { await this.stop(); }
+  async onApplicationShutdown(): Promise<void> {
+    await this.stop();
+  }
 
   private buildKafka(): Kafka {
     return new Kafka({
@@ -59,9 +88,13 @@ export class KafkaConsumerService implements OnModuleInit, OnApplicationShutdown
     this.kafka ??= this.buildKafka();
     this.health.setBroker(this.kafkaConfig.getBrokers());
     this.health.setStartupDiagnostics(this.kafkaConfig.getDiagnostics());
-    this.logger.log(`[KAFKA] Connecting to broker: ${this.kafkaConfig.getBrokers().join(', ')}`);
+    this.logger.log(
+      `[KAFKA] Connecting to broker: ${this.kafkaConfig.getBrokers().join(', ')}`,
+    );
 
-    const consumerEntries = Object.entries(KAFKA_CONSUMER_SUBSCRIPTIONS) as Array<[KafkaConsumerGroupId, readonly KafkaTopic[]]>;
+    const consumerEntries = Object.entries(
+      KAFKA_CONSUMER_SUBSCRIPTIONS,
+    ) as Array<[KafkaConsumerGroupId, readonly KafkaTopic[]]>;
 
     const consumerStarts = consumerEntries.map(async ([groupId, topics]) => {
       await this.startConsumerGroup(groupId, topics);
@@ -78,40 +111,64 @@ export class KafkaConsumerService implements OnModuleInit, OnApplicationShutdown
     if (allConnected) {
       this.logger.log('[KAFKA] Kafka consumers connected');
     } else {
-      this.logger.warn('[KAFKA] Kafka consumers partially connected — supervisors active');
+      this.logger.warn(
+        '[KAFKA] Kafka consumers partially connected — supervisors active',
+      );
     }
   }
 
   /**
    * Start a single consumer group: connect, subscribe, run.
    */
-  private async startConsumerGroup(groupId: KafkaConsumerGroupId, topics: readonly KafkaTopic[]): Promise<void> {
+  private async startConsumerGroup(
+    groupId: KafkaConsumerGroupId,
+    topics: readonly KafkaTopic[],
+  ): Promise<void> {
     this.health.markConsumerState(groupId, false, topics, 'CONNECTING');
 
     const consumer = this.kafka!.consumer({ groupId });
     this.consumers.set(groupId, consumer);
 
-    await this.health.withRetry(`Kafka consumer connection for ${groupId}`, async () => { await consumer.connect(); return undefined; }, { retries: this.kafkaConfig.getConnectionRetryLimit(), delayMs: 250 });
+    await this.health.withRetry(
+      `Kafka consumer connection for ${groupId}`,
+      async () => {
+        await consumer.connect();
+        return undefined;
+      },
+      { retries: this.kafkaConfig.getConnectionRetryLimit(), delayMs: 250 },
+    );
 
     for (const topic of topics) {
-      await this.health.withRetry(`Kafka consumer subscription for ${groupId} -> ${topic}`, async () => { await consumer.subscribe({ topic, fromBeginning: false }); return undefined; }, { retries: 3, delayMs: 150 });
+      await this.health.withRetry(
+        `Kafka consumer subscription for ${groupId} -> ${topic}`,
+        async () => {
+          await consumer.subscribe({ topic, fromBeginning: false });
+          return undefined;
+        },
+        { retries: 3, delayMs: 150 },
+      );
     }
 
     this.health.markConsumerState(groupId, true, topics, 'CONNECTED', 0);
     this.logger.log(`[KAFKA] Consumer subscriptions restored for ${groupId}`);
 
-    void consumer.run({
-      autoCommit: true,
-      eachMessage: (message: EachMessagePayload): Promise<void> => Promise.resolve(this.handleMessage(groupId, message)),
-    }).catch((error: unknown) => {
-      if (this.stopping) return;
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`[KAFKA] Consumer stopped unexpectedly for group ${groupId}: ${message}`);
-      this.health.markConsumerState(groupId, false, topics, 'RESTARTING');
-      this.health.setError(message);
-      // Launch the supervised restart loop
-      void this.supervisedRestart(groupId, topics);
-    });
+    void consumer
+      .run({
+        autoCommit: true,
+        eachMessage: (message: EachMessagePayload): Promise<void> =>
+          Promise.resolve(this.handleMessage(groupId, message)),
+      })
+      .catch((error: unknown) => {
+        if (this.stopping) return;
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.error(
+          `[KAFKA] Consumer stopped unexpectedly for group ${groupId}: ${message}`,
+        );
+        this.health.markConsumerState(groupId, false, topics, 'RESTARTING');
+        this.health.setError(message);
+        // Launch the supervised restart loop
+        void this.supervisedRestart(groupId, topics);
+      });
   }
 
   /**
@@ -119,7 +176,10 @@ export class KafkaConsumerService implements OnModuleInit, OnApplicationShutdown
    * Ensures only one restart loop runs per consumer group.
    * Does NOT restart after intentional shutdown.
    */
-  private async supervisedRestart(groupId: KafkaConsumerGroupId, topics: readonly KafkaTopic[]): Promise<void> {
+  private async supervisedRestart(
+    groupId: KafkaConsumerGroupId,
+    topics: readonly KafkaTopic[],
+  ): Promise<void> {
     if (this.stopping) return;
     if (this.restartingGroups.has(groupId)) return; // Already restarting
     this.restartingGroups.add(groupId);
@@ -133,18 +193,38 @@ export class KafkaConsumerService implements OnModuleInit, OnApplicationShutdown
       attempt++;
 
       if (maxAttempts > 0 && attempt > maxAttempts) {
-        this.logger.error(`[KAFKA] Consumer group ${groupId} exceeded max restart attempts (${maxAttempts}). Giving up.`);
-        this.health.markConsumerState(groupId, false, topics, 'DISCONNECTED', attempt, `Exceeded max restart attempts (${maxAttempts})`);
+        this.logger.error(
+          `[KAFKA] Consumer group ${groupId} exceeded max restart attempts (${maxAttempts}). Giving up.`,
+        );
+        this.health.markConsumerState(
+          groupId,
+          false,
+          topics,
+          'DISCONNECTED',
+          attempt,
+          `Exceeded max restart attempts (${maxAttempts})`,
+        );
         break;
       }
 
       // Exponential backoff with jitter
-      const delay = Math.min(initialDelayMs * Math.pow(2, attempt - 1), maxDelayMs);
+      const delay = Math.min(
+        initialDelayMs * Math.pow(2, attempt - 1),
+        maxDelayMs,
+      );
       const jitter = Math.floor(Math.random() * 500);
       const totalDelay = delay + jitter;
 
-      this.logger.warn(`[KAFKA] Restarting consumer in ${totalDelay}ms (group=${groupId}, attempt=${attempt})`);
-      this.health.markConsumerState(groupId, false, topics, 'RESTARTING', attempt);
+      this.logger.warn(
+        `[KAFKA] Restarting consumer in ${totalDelay}ms (group=${groupId}, attempt=${attempt})`,
+      );
+      this.health.markConsumerState(
+        groupId,
+        false,
+        topics,
+        'RESTARTING',
+        attempt,
+      );
 
       await this.sleep(totalDelay);
 
@@ -154,7 +234,11 @@ export class KafkaConsumerService implements OnModuleInit, OnApplicationShutdown
         // Step 1: Safely disconnect the old consumer
         const oldConsumer = this.consumers.get(groupId);
         if (oldConsumer) {
-          try { await oldConsumer.disconnect(); } catch { /* ignore disconnect errors during recovery */ }
+          try {
+            await oldConsumer.disconnect();
+          } catch {
+            /* ignore disconnect errors during recovery */
+          }
           this.consumers.delete(groupId);
         }
 
@@ -163,13 +247,24 @@ export class KafkaConsumerService implements OnModuleInit, OnApplicationShutdown
 
         // Step 3: Start a fresh consumer group
         await this.startConsumerGroup(groupId, topics);
-        this.logger.log(`[KAFKA] Consumer reconnected for group ${groupId} after ${attempt} restart attempt(s)`);
+        this.logger.log(
+          `[KAFKA] Consumer reconnected for group ${groupId} after ${attempt} restart attempt(s)`,
+        );
         this.health.setError(null);
         break; // Successfully restarted
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        this.logger.warn(`[KAFKA] Restart attempt ${attempt} failed for ${groupId}: ${message}`);
-        this.health.markConsumerState(groupId, false, topics, 'RESTARTING', attempt, message);
+        this.logger.warn(
+          `[KAFKA] Restart attempt ${attempt} failed for ${groupId}: ${message}`,
+        );
+        this.health.markConsumerState(
+          groupId,
+          false,
+          topics,
+          'RESTARTING',
+          attempt,
+          message,
+        );
       }
     }
 
@@ -180,7 +275,9 @@ export class KafkaConsumerService implements OnModuleInit, OnApplicationShutdown
    * Kick off supervisor loops for all consumer groups (used when initial start fails).
    */
   private startAllSupervisors(): void {
-    const consumerEntries = Object.entries(KAFKA_CONSUMER_SUBSCRIPTIONS) as Array<[KafkaConsumerGroupId, readonly KafkaTopic[]]>;
+    const consumerEntries = Object.entries(
+      KAFKA_CONSUMER_SUBSCRIPTIONS,
+    ) as Array<[KafkaConsumerGroupId, readonly KafkaTopic[]]>;
     for (const [groupId, topics] of consumerEntries) {
       void this.supervisedRestart(groupId, topics);
     }
@@ -199,41 +296,69 @@ export class KafkaConsumerService implements OnModuleInit, OnApplicationShutdown
       this.health.markConsumerState(groupId, false, topics, 'STOPPING');
     }
 
-    const disconnectJobs = Array.from(this.consumers.entries()).map(async ([groupId, consumer]) => {
-      try { await consumer.disconnect(); this.health.markConsumerState(groupId, false, KAFKA_CONSUMER_SUBSCRIPTIONS[groupId], 'DISCONNECTED'); } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.logger.warn(`Kafka consumer group ${groupId} disconnect warning: ${message}`);
-      }
-    });
+    const disconnectJobs = Array.from(this.consumers.entries()).map(
+      async ([groupId, consumer]) => {
+        try {
+          await consumer.disconnect();
+          this.health.markConsumerState(
+            groupId,
+            false,
+            KAFKA_CONSUMER_SUBSCRIPTIONS[groupId],
+            'DISCONNECTED',
+          );
+        } catch (error: unknown) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          this.logger.warn(
+            `Kafka consumer group ${groupId} disconnect warning: ${message}`,
+          );
+        }
+      },
+    );
     await Promise.allSettled(disconnectJobs);
-    if (disconnectJobs.length > 0) this.logger.log('[KAFKA] Kafka consumers stopped gracefully');
+    if (disconnectJobs.length > 0)
+      this.logger.log('[KAFKA] Kafka consumers stopped gracefully');
     this.consumers.clear();
     this.started = false;
   }
 
-  private handleMessage(groupId: KafkaConsumerGroupId, message: EachMessagePayload): void {
+  private handleMessage(
+    groupId: KafkaConsumerGroupId,
+    message: EachMessagePayload,
+  ): void {
     const raw = message.message.value?.toString('utf8');
     if (!raw) return;
 
     let parsed: unknown;
-    try { parsed = JSON.parse(raw) as unknown; } catch (error: unknown) {
-      const messageText = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`Malformed Kafka event on ${message.topic} (${groupId}): ${messageText}`);
+    try {
+      parsed = JSON.parse(raw) as unknown;
+    } catch (error: unknown) {
+      const messageText =
+        error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Malformed Kafka event on ${message.topic} (${groupId}): ${messageText}`,
+      );
       return;
     }
 
     if (!isKafkaEventEnvelope(parsed)) {
-      this.logger.warn(`Rejected Kafka event without valid envelope on topic ${message.topic} (group ${groupId}).`);
+      this.logger.warn(
+        `Rejected Kafka event without valid envelope on topic ${message.topic} (group ${groupId}).`,
+      );
       return;
     }
 
     if (!isTopicPayload(message.topic as KafkaTopic, parsed.payload)) {
-      this.logger.warn(`Rejected Kafka event with invalid payload structure on topic ${message.topic} (group ${groupId}).`);
+      this.logger.warn(
+        `Rejected Kafka event with invalid payload structure on topic ${message.topic} (group ${groupId}).`,
+      );
       return;
     }
 
     this.health.markConsumed(parsed.timestamp);
-    this.logger.debug(`[${groupId}] ${message.topic} :: ${parsed.eventType} :: ${parsed.correlationId}`);
+    this.logger.debug(
+      `[${groupId}] ${message.topic} :: ${parsed.eventType} :: ${parsed.correlationId}`,
+    );
   }
 
   private summarizePayload(payload: Record<string, unknown>): string {

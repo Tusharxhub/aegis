@@ -22,7 +22,12 @@ export const OutboxEventSchema = new Schema<IOutboxEvent>(
     key: { type: String, default: null },
     payload: { type: Schema.Types.Mixed, required: true },
     headers: { type: Schema.Types.Mixed, default: {} },
-    status: { type: String, enum: ['PENDING', 'PUBLISHED', 'FAILED'], default: 'PENDING', index: true },
+    status: {
+      type: String,
+      enum: ['PENDING', 'PUBLISHED', 'FAILED'],
+      default: 'PENDING',
+      index: true,
+    },
     attempts: { type: Number, default: 0 },
     nextAttemptAt: { type: Date, default: Date.now, index: true },
     lastError: { type: String, default: null },

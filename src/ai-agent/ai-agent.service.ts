@@ -96,7 +96,10 @@ export class AiAgentService {
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+      const timeout = setTimeout(
+        () => controller.abort(),
+        this.requestTimeoutMs,
+      );
 
       try {
         const response = await fetch(url, {

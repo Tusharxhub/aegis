@@ -1,9 +1,17 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { MongoService } from '../mongo/mongo.service.js';
 import { KafkaProducerService } from '../kafka/kafka.producer.js';
 import { randomUUID } from 'crypto';
 import type { KafkaTopic } from '../kafka/kafka.constants.js';
-import type { KafkaPublishContext, KafkaPayloadForTopic } from '../kafka/kafka.types.js';
+import type {
+  KafkaPublishContext,
+  KafkaPayloadForTopic,
+} from '../kafka/kafka.types.js';
 
 /** Maximum number of retry attempts before marking an event as FAILED. */
 const MAX_ATTEMPTS = 10;
@@ -67,7 +75,9 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
       headers: {
         eventType: context.eventType,
         source: context.source,
-        ...(context.correlationId ? { correlationId: context.correlationId } : {}),
+        ...(context.correlationId
+          ? { correlationId: context.correlationId }
+          : {}),
       },
       status: 'PENDING',
       attempts: 0,
@@ -84,7 +94,9 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`[Outbox] Immediate Kafka publish failed for eventId=${eventId}: ${message}`);
+      this.logger.warn(
+        `[Outbox] Immediate Kafka publish failed for eventId=${eventId}: ${message}`,
+      );
     }
 
     if (published) {
@@ -154,7 +166,12 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
         if (attempts > MAX_ATTEMPTS) {
           await this.mongoService.OutboxModel.updateOne(
             { _id: event._id },
-            { $set: { status: 'FAILED', lastError: `Exceeded max attempts (${MAX_ATTEMPTS})` } },
+            {
+              $set: {
+                status: 'FAILED',
+                lastError: `Exceeded max attempts (${MAX_ATTEMPTS})`,
+              },
+            },
           );
           this.logger.error(
             `[Outbox] Event ${event.eventId as string} marked FAILED after ${MAX_ATTEMPTS} attempts.`,
@@ -171,14 +188,20 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
             {
               eventId: event.eventId as string,
               eventType: payload.eventType as string,
-              source: payload.source as 'watchman' | 'incident-service' | 'ai-engine' | 'remediation-engine' | 'audit-service',
+              source: payload.source as
+                | 'watchman'
+                | 'incident-service'
+                | 'ai-engine'
+                | 'remediation-engine'
+                | 'audit-service',
               correlationId: payload.correlationId as string | undefined,
               timestamp: payload.timestamp as string | undefined,
               payload: payload.payload,
             } as any, // Outbox stores serialized payloads — strict generic types are not recoverable at retry boundary
           );
         } catch (error: unknown) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message =
+            error instanceof Error ? error.message : String(error);
           this.logger.warn(
             `[Outbox] Retry publish failed for eventId=${event.eventId as string} (attempt ${attempts}): ${message}`,
           );
@@ -216,7 +239,9 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (processed > 0) {
-        this.logger.log(`[Outbox] Retry batch processed ${processed} event(s).`);
+        this.logger.log(
+          `[Outbox] Retry batch processed ${processed} event(s).`,
+        );
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
