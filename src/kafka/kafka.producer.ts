@@ -29,7 +29,7 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    await this.connect().catch((error: unknown) => {
+    await this.connect().catch(() => {
       this.logger.warn(
         `[KAFKA] Broker unavailable. Start infrastructure using: npm run infra:up`,
       );

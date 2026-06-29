@@ -17,11 +17,7 @@ import {
 } from './kafka.constants.js';
 import { KafkaConfigService } from './kafka.config.js';
 import { KafkaHealthService } from './kafka.health.js';
-import {
-  isKafkaEventEnvelope,
-  isTopicPayload,
-  type KafkaEventEnvelope,
-} from './kafka.types.js';
+import { isKafkaEventEnvelope, isTopicPayload } from './kafka.types.js';
 
 /**
  * Supervised Kafka consumer lifecycle.
@@ -56,7 +52,7 @@ export class KafkaConsumerService
   async onModuleInit(): Promise<void> {
     try {
       await this.start();
-    } catch (error: unknown) {
+    } catch {
       this.logger.warn(`[KAFKA] Consumers offline — will attempt recovery`);
       this.health.setError(
         'Kafka is unreachable. Start infrastructure with npm run infra:up.',
@@ -291,7 +287,7 @@ export class KafkaConsumerService
     this.logger.log('[KAFKA] Disconnecting consumers...');
 
     // Mark all consumers as STOPPING
-    for (const [groupId, _consumer] of this.consumers.entries()) {
+    for (const [groupId] of this.consumers.entries()) {
       const topics = KAFKA_CONSUMER_SUBSCRIPTIONS[groupId];
       this.health.markConsumerState(groupId, false, topics, 'STOPPING');
     }
