@@ -78,12 +78,14 @@ docker-build-demo: ## Build Demo Crash Service Docker image
 	docker build -t aegis-demo:latest ./services/demo-crash-service
 
 docker-push-ai: docker-build-ai ## Push AI Engine to registry
-	docker tag aegis-ai-engine:latest $(REGISTRY)/aegis/ai-engine:latest
-	docker push $(REGISTRY)/aegis/ai-engine:latest
+	@OWNER=$$(echo "$(REGISTRY)" | tr '[:upper:]' '[:lower:]'); \
+	docker tag aegis-ai-engine:latest $$OWNER/aegis/ai-engine:latest; \
+	docker push $$OWNER/aegis/ai-engine:latest
 
 docker-push-demo: docker-build-demo ## Push Demo Service to registry
-	docker tag aegis-demo:latest $(REGISTRY)/aegis/demo-crash-service:latest
-	docker push $(REGISTRY)/aegis/demo-crash-service:latest
+	@OWNER=$$(echo "$(REGISTRY)" | tr '[:upper:]' '[:lower:]'); \
+	docker tag aegis-demo:latest $$OWNER/aegis/demo-crash-service:latest; \
+	docker push $$OWNER/aegis/demo-crash-service:latest
 
 # ─── Release ────────────────────────────────────────────────────────────────
 release-tag: ## Create a release tag (usage: make release-tag v=1.0.0)
