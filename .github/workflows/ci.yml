@@ -208,9 +208,17 @@ jobs:
 
       - name: Run health checks
         run: |
-          curl -sf http://localhost:3001/ || exit 1
-          curl -sf http://localhost:3001/api/health || exit 1
-          curl -sf http://localhost:8001/health || exit 1
+          for url in http://localhost:3001/ http://localhost:3001/api/health http://localhost:8001/health; do
+            for i in $(seq 1 15); do
+              if curl -sf "$url"; then
+                echo ""
+                break
+              fi
+              echo "Waiting for $url (attempt $i/15)..."
+              sleep 2
+            done
+            curl -sf "$url" || { echo "FAILED: $url not ready"; exit 1; }
+          done
 
       - name: Run verify script
         run: npm run verify
