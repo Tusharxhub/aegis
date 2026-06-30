@@ -223,6 +223,8 @@ jobs:
       - name: Run verify script
         run: npm run verify
         timeout-minutes: 1
+        env:
+          AI_ENGINE_URL: http://localhost:8001
 
       - name: Tear down infrastructure
         if: always()
