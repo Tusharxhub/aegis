@@ -177,12 +177,22 @@ jobs:
           KAFKA_BROKER: localhost:9094
 
       - name: Start backend
-        run: node dist/main.js &
+        run: |
+          nohup node dist/main.js > backend.log 2>&1 &
+          echo "Backend PID: $!"
         env:
+          NODE_ENV: development
           BACKEND_PORT: '3001'
           KAFKA_BROKER: localhost:9094
+          KAFKA_CLIENT_ID: aegis-orchestrator
           MONGODB_URI: mongodb://localhost:27018/aegis
           AI_ENGINE_URL: http://localhost:8001
+          DEMO_CRASH_SERVICE_URL: http://localhost:3000
+          KAFKA_CONNECTION_RETRIES: '15'
+          KAFKA_RESTART_INITIAL_DELAY_MS: '1000'
+          KAFKA_RESTART_MAX_DELAY_MS: '30000'
+          KAFKA_RESTART_MAX_ATTEMPTS: '0'
+          AI_ENGINE_TIMEOUT_MS: '10000'
 
       - name: Wait for backend
         run: |
@@ -190,6 +200,9 @@ jobs:
             curl -sf http://localhost:3001/ && exit 0
             sleep 2
           done
+          echo "=== Backend log ==="
+          cat backend.log
+          echo "=== End backend log ==="
           echo "Backend did not become ready"
           exit 1
 
