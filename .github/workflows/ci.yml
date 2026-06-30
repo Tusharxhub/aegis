@@ -172,11 +172,11 @@ jobs:
 
       - name: Start infrastructure
         run: npm run infra:up
-        timeout: 120s
+        timeout-minutes: 2
 
       - name: Wait for Kafka
         run: npm run wait:kafka
-        timeout: 60s
+        timeout-minutes: 1
 
       - name: Run health checks
         run: |
@@ -187,7 +187,7 @@ jobs:
 
       - name: Run verify script
         run: npm run verify
-        timeout: 30s
+        timeout-minutes: 1
 
       - name: Tear down infrastructure
         if: always()
