@@ -134,8 +134,6 @@ jobs:
           context: ./services/ai-engine
           push: false
           tags: aegis-ai-engine:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Build Demo Crash Service image
         uses: docker/build-push-action@v5
@@ -143,8 +141,6 @@ jobs:
           context: ./services/demo-crash-service
           push: false
           tags: aegis-demo:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   # ─── Integration Test ─────────────────────────────────────────────────────
   integration-test:
