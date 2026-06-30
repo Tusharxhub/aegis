@@ -150,7 +150,6 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
           },
           {
             $set: { nextAttemptAt: new Date(Date.now() + 60_000) }, // Temporarily push forward to prevent re-claim
-            $inc: { attempts: 1 },
           },
           { returnDocument: 'after', sort: { nextAttemptAt: 1 } },
         );
@@ -223,7 +222,8 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
           );
         } else {
           // Calculate exponential backoff: base * 2^(attempts-1)
-          const backoffMs = BASE_BACKOFF_MS * Math.pow(2, attempts - 1);
+          const nextAttempts = attempts + 1;
+          const backoffMs = BASE_BACKOFF_MS * Math.pow(2, nextAttempts - 1);
           const nextAttempt = new Date(Date.now() + backoffMs);
 
           await this.mongoService.OutboxModel.updateOne(
@@ -231,8 +231,9 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
             {
               $set: {
                 nextAttemptAt: nextAttempt,
-                lastError: `Retry attempt ${attempts} failed`,
+                lastError: `Retry attempt ${nextAttempts} failed`,
               },
+              $inc: { attempts: 1 },
             },
           );
         }

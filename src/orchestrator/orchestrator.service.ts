@@ -299,6 +299,11 @@ export class OrchestratorService implements OnModuleInit {
       3_600_000, // 1 hour window
     );
 
+    // If no recent restarts, reset the counter so the next cycle starts fresh
+    if (recentRestarts === 0) {
+      await this.auditService.resetRestartCount(event.containerId);
+    }
+
     if (recentRestarts >= MAX_RESTARTS_PER_HOUR) {
       this.logger.warn(
         `[${correlationId}] Circuit breaker TRIPPED for [${event.containerName}] — ${recentRestarts} restarts in the last hour (limit: ${MAX_RESTARTS_PER_HOUR}). Remediation blocked.`,
@@ -347,6 +352,7 @@ export class OrchestratorService implements OnModuleInit {
         false,
         'Circuit breaker tripped',
         Date.now() - pipelineStartTime,
+        eventId,
       );
       return;
     }
@@ -378,6 +384,7 @@ export class OrchestratorService implements OnModuleInit {
         false,
         'Monitoring disabled',
         Date.now() - pipelineStartTime,
+        eventId,
       );
       return;
     }
@@ -490,6 +497,7 @@ export class OrchestratorService implements OnModuleInit {
         false,
         skipReason,
         Date.now() - pipelineStartTime,
+        eventId,
       );
       return;
     }
@@ -599,6 +607,7 @@ export class OrchestratorService implements OnModuleInit {
       success,
       executionLogs,
       durationMs,
+      eventId,
     );
   }
 
@@ -611,6 +620,7 @@ export class OrchestratorService implements OnModuleInit {
     success: boolean,
     logs: string,
     durationMs: number,
+    eventId?: string,
   ): Promise<void> {
     try {
       await this.outbox.storeAndPublish(KAFKA_TOPICS.REMEDIATION_COMPLETED, {
@@ -618,7 +628,7 @@ export class OrchestratorService implements OnModuleInit {
         source: 'remediation-engine',
         correlationId,
         payload: {
-          eventId: correlationId,
+          eventId: eventId ?? correlationId,
           planId,
           executionId,
           containerId: event.containerId,

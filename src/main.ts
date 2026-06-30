@@ -55,10 +55,7 @@ async function bootstrap(): Promise<void> {
   const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
   for (const signal of signals) {
     process.on(signal, () => {
-      shutdownLogger.log('[AEGIS] Shutdown requested');
-      shutdownLogger.log('[KAFKA] Stopping consumer supervisors');
-      shutdownLogger.log('[KAFKA] Disconnecting consumers');
-      shutdownLogger.log('[KAFKA] Disconnecting producer');
+      shutdownLogger.log(`[AEGIS] Received ${signal} — shutdown initiated`);
     });
   }
 

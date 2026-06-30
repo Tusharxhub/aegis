@@ -85,6 +85,12 @@ export class AuditService {
 
   /**
    * Get the number of restarts for a container within a time window (ms).
+   *
+   * If the last remediation is outside the window, the counter is stale
+   * and we return 0 (the restarts are old enough to not matter).
+   * If the last remediation is inside the window, we return the cumulative
+   * restartCount, which tracks all restarts since the counter was last
+   * reset (it is reset when the window expires and a new crash occurs).
    */
   async getRestartCount(
     containerId: string,
@@ -106,6 +112,24 @@ export class AuditService {
         `Failed to get restart count for ${containerId}: ${msg}`,
       );
       return 0;
+    }
+  }
+
+  /**
+   * Reset the restart count for a container (called when the restart
+   * window has fully elapsed and a fresh cycle begins).
+   */
+  async resetRestartCount(containerId: string): Promise<void> {
+    try {
+      await this.mongoService.ServiceModel.findOneAndUpdate(
+        { containerId },
+        { $set: { restartCount: 0 } },
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Failed to reset restart count for ${containerId}: ${msg}`,
+      );
     }
   }
 

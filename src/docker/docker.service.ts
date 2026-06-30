@@ -196,10 +196,17 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
       : (raw.Action as 'die' | 'oom' | 'kill');
     const exitCode = parseInt(raw.Actor.Attributes.exitCode ?? '0', 10);
 
+    // For health_status events, only process unhealthy transitions
     if (eventType === 'health_status') {
+      const healthStatus = raw.Action.replace('health_status: ', '').trim();
       this.logger.warn(
-        `Container [${containerName}] health transition detected: ${raw.Action}`,
+        `Container [${containerName}] health transition detected: ${healthStatus}`,
       );
+
+      // Only treat unhealthy as a crash-like event; ignore healthy/starting/none
+      if (healthStatus !== 'unhealthy') {
+        return;
+      }
     } else {
       this.logger.warn(
         `CRITICAL: Container [${containerName}] — event: ${eventType}, exit code: ${exitCode}`,

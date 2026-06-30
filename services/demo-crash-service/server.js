@@ -77,8 +77,13 @@ app.get('/crash/port', (req, res) => {
   console.error('    at Function.listen (/app/node_modules/express/lib/application.js:635:24)');
 
   // Attempt to listen on the occupied port again to crash with EADDRINUSE
-  const appCollision = express();
-  appCollision.listen(port, () => {});
+  const http = require('http');
+  const server = http.createServer();
+  server.on('error', (err) => {
+    console.error(`Port collision error: ${err.message}`);
+    process.exit(1);
+  });
+  server.listen(port);
 });
 
 app.listen(port, () => {

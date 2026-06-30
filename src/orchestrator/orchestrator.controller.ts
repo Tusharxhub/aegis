@@ -132,7 +132,7 @@ export class OrchestratorController {
         producerConnected: snapshot.producerConnected,
         consumersConnected,
         consumerState,
-        restartAttempts: 0,
+        restartAttempts,
       };
     }
 
