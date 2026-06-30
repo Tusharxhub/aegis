@@ -168,7 +168,7 @@ jobs:
 
       - name: Start infrastructure
         run: npm run infra:up
-        timeout-minutes: 2
+        timeout-minutes: 5
 
       - name: Wait for Kafka
         run: npm run wait:kafka
