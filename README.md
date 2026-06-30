@@ -127,7 +127,7 @@ graph TD
 ### Streaming Layer
 - **Kafka** in KRaft mode (no ZooKeeper)
 - **Kafka UI** — local topic inspection
-- Topics: `container`, `incident`, `logs`, `diagnosis`, `remediation`, `audit`
+- Topics: `aegis.container.events`, `aegis.incident.detected`, `aegis.logs.extracted`, `aegis.ai.diagnosis.completed`, `aegis.remediation.started`, `aegis.remediation.completed`, `aegis.audit.events`, `aegis.rl.feedback`
 
 ### Python Services
 - `services/ai-engine` — offline inference and model training
@@ -173,7 +173,7 @@ Useful commands if Kafka or other services fail:
 ```bash
 docker compose ps
 docker logs aegis-kafka --tail=80
-nc -zv localhost 9092
+nc -zv localhost 9094
 ```
 
 ---
@@ -183,32 +183,27 @@ nc -zv localhost 9092
 | Service | URL / Address |
 |---|---|
 | Backend API | `http://localhost:3001` |
-| Kafka UI | `http://localhost:8080` |
-| MongoDB | `localhost:27017` |
-| Kafka Broker | `localhost:9092` |
-| AI Engine | `http://localhost:8000` |
+| Swagger Docs | `http://localhost:3001/api/docs` |
+| Kafka UI | `http://localhost:8081` |
+| MongoDB | `localhost:27018` |
+| Kafka Broker | `localhost:9094` |
+| AI Engine | `http://localhost:8001` |
 | Demo Crash Service | `http://localhost:3000` |
-
----
-
-## CLI
-
-```bash
-aegis doctor                  # Infrastructure health check
-aegis status                  # Platform snapshot
-aegis stream                  # Stream Kafka telemetry to terminal
-aegis chaos <mode>            # Trigger chaos test
-                              # modes: oom | timeout | crash | permission | port
-```
 
 ---
 
 ## Health Checks
 
 ```bash
-curl http://localhost:3001/api/health
-curl http://localhost:3001/api/orchestrator/health/kafka
-curl http://localhost:8000/health
+curl http://localhost:3001/                          # Root liveness
+curl http://localhost:3001/api/health                # Health check
+curl http://localhost:3001/api/orchestrator/health/kafka  # Kafka health
+curl http://localhost:3001/api/orchestrator/containers    # Container list
+curl http://localhost:3001/api/orchestrator/incidents     # Incidents
+curl http://localhost:3001/api/orchestrator/remediations  # Remediations
+curl http://localhost:3001/api/orchestrator/metrics       # Platform metrics
+curl http://localhost:8001/health                    # AI engine health
+curl http://localhost:3000/health                    # Demo crash service health
 ```
 
 ---
@@ -256,6 +251,8 @@ MongoDB stores the complete audit trail:
 - **remediation_plans** — AI diagnosis, risk levels, suggested actions
 - **action_executions** — remediation outcomes and duration
 - **episodes** — RL training replay buffer
+- **metrics_snapshots** — CPU, RAM, disk checkpoints
+- **outbox_events** — durable Kafka outbox with retry
 
 ---
 
@@ -274,12 +271,13 @@ The engine auto-trains on synthetic data if no pre-trained weights exist.
 
 ```typescript
 const safetyPassed =
+  !isFallbackDiagnosis &&
   confidenceScore >= 0.85 &&
   riskLevel === 'LOW' &&
   suggestedAction === 'RESTART_CONTAINER';
 ```
 
-Only low-risk, high-confidence actions are executed automatically. All other actions are skipped and flagged for operator review.
+Only low-risk, high-confidence actions are executed automatically. Fallback diagnoses from an unavailable AI engine are never auto-remediated. All other actions are skipped and flagged for operator review.
 
 ---
 
@@ -288,8 +286,174 @@ Only low-risk, high-confidence actions are executed automatically. All other act
 - No shell command execution — all Docker actions use Dockerode API
 - Only 3 allowed actions: RESTART_CONTAINER, STOP_CONTAINER, IGNORE
 - Confidence and risk gate prevents low-confidence automated actions
-- Internal API endpoints protected by token-based guards
+- Internal API endpoints protected by `InternalTokenGuard` (token: `x-aegis-token` header)
 - No cloud AI APIs — everything is local and offline
+- Docker label `aegis.monitor=false` opts containers out of monitoring
+
+---
+
+## Environment Variables
+
+```env
+# Infrastructure
+MONGODB_URI=mongodb://localhost:27018/aegis
+KAFKA_BROKER=localhost:9094
+KAFKA_CLIENT_ID=aegis-orchestrator
+KAFKA_CONNECTION_RETRIES=15
+KAFKA_RESTART_INITIAL_DELAY_MS=1000
+KAFKA_RESTART_MAX_DELAY_MS=30000
+KAFKA_RESTART_MAX_ATTEMPTS=0
+
+# AI Engine
+AI_ENGINE_URL=http://localhost:8001
+AI_ENGINE_TIMEOUT_MS=10000
+
+# Demo Service
+DEMO_CRASH_SERVICE_URL=http://localhost:3000
+
+# Backend
+BACKEND_PORT=3001
+NODE_ENV=development
+
+# Monitoring Controls
+AEGIS_MAX_RESTARTS_PER_HOUR=5
+AEGIS_EXTRA_IGNORED_CONTAINERS=
+
+# Security
+AEGIS_INTERNAL_TOKEN=aegis-dev-token
+
+# Docker
+DOCKER_SOCKET_PATH=/var/run/docker.sock
+```
+
+---
+
+## NPM Scripts
+
+```bash
+npm run dev:safe          # Start full stack (infra + backend)
+npm run dev               # Start backend in dev mode
+npm run build             # Build NestJS backend
+npm run build:cli         # Build CLI tool
+npm run start:prod        # Start production server
+npm run infra:up          # Start Docker infrastructure
+npm run infra:down        # Stop Docker infrastructure
+npm run wait:kafka        # Wait for Kafka to be ready
+npm run verify            # Runtime verification
+npm run fix:mongo-port    # Fix MongoDB port conflict
+npm run reset:docker      # Full Docker reset and rebuild
+npm run lint              # Run ESLint
+npm run test              # Run unit tests
+npm run typecheck         # TypeScript type checking
+npm run format            # Format with Prettier
+npm run cli               # Run CLI from dist
+```
+
+---
+
+## Makefile Commands
+
+```bash
+make help                 # Show all available commands
+make build                # Build NestJS backend
+make build-cli            # Build CLI tool
+make build-all            # Build backend + CLI
+make build-docker         # Build all Docker images locally
+make lint                 # Run ESLint
+make typecheck            # Run TypeScript type checking
+make test                 # Run unit tests
+make format               # Format code with Prettier
+make quality              # Run all quality checks (lint + typecheck + test)
+make infra-up             # Start Docker infrastructure
+make infra-down           # Stop Docker infrastructure
+make infra-restart        # Restart infrastructure
+make verify               # Run runtime verification
+make dev                  # Start backend in dev mode
+make dev-safe             # Start full stack (infra + backend)
+make start                # Start production server
+make stop                 # Stop all containers
+make docker-build-ai      # Build AI Engine Docker image
+make docker-build-demo    # Build Demo Crash Service Docker image
+make docker-push-ai       # Push AI Engine to registry
+make docker-push-demo     # Push Demo Service to registry
+make release-tag          # Create a release tag (usage: make release-tag v=1.0.0)
+make clean                # Clean build artifacts
+```
+
+---
+
+## CLI Reference
+
+### Core Commands
+
+```bash
+aegis doctor                  # Infrastructure health check
+aegis status                  # Platform snapshot
+aegis stream                  # Stream Kafka telemetry to terminal
+aegis dashboard               # Live terminal dashboard (5s refresh)
+```
+
+### Container Management
+
+```bash
+aegis containers list              # List all monitored containers
+aegis containers inspect <name>    # Container details + crash history
+aegis containers logs <name>       # Recent crash logs
+```
+
+### Incident Management
+
+```bash
+aegis incidents list               # List recent incidents
+aegis incidents inspect <id>       # Full incident detail
+```
+
+### Exclusion Management
+
+```bash
+aegis exclude list                 # Show exclusion rules
+aegis exclude add <name>           # Add to exclusion list
+aegis exclude remove <name>        # Remove from exclusion list
+```
+
+### Chaos Testing
+
+```bash
+aegis chaos oom            # OOM crash simulation
+aegis chaos timeout        # Timeout hang simulation
+aegis chaos crash          # General process crash
+aegis chaos permission     # Permission denied simulation
+aegis chaos port           # Port collision simulation
+```
+
+### Options
+
+```bash
+--debug                    # Enable debug output
+```
+
+---
+
+## REST API Endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/` | GET | Root liveness probe |
+| `/api/health` | GET | Health check |
+| `/api/docs` | GET | Swagger/OpenAPI documentation |
+| `/api/orchestrator/health/kafka` | GET | Kafka health status |
+| `/api/orchestrator/containers` | GET | List all containers |
+| `/api/orchestrator/containers/:id` | GET | Inspect specific container |
+| `/api/orchestrator/containers/:id/logs` | GET | Get container crash logs |
+| `/api/orchestrator/containers/:id/restart` | POST | Restart container (token protected) |
+| `/api/orchestrator/incidents` | GET | List incidents |
+| `/api/orchestrator/incidents/:id` | GET | Get incident detail |
+| `/api/orchestrator/remediations` | GET | List remediations |
+| `/api/orchestrator/remediations/:id` | GET | Get remediation detail |
+| `/api/orchestrator/metrics` | GET | Platform metrics |
+| `/api/orchestrator/exclusions` | GET | List exclusions |
+| `/api/orchestrator/exclusions` | POST | Add exclusion (token protected) |
+| `/api/orchestrator/exclusions/:name` | DELETE | Remove exclusion (token protected) |
 
 ---
 
@@ -306,10 +470,20 @@ docker logs aegis-kafka --tail=80
 docker exec aegis-mongodb mongosh --eval "db.adminCommand('ping')"
 
 # Verify Kafka connectivity
-nc -zv localhost 9092
+nc -zv localhost 9094
 
-# Full infrastructure reset
-node scripts/reset-docker-and-rebuild.js
+# Full runtime verification
+npm run verify
+
+# Fix MongoDB port conflict
+npm run fix:mongo-port
+
+# Full Docker reset and rebuild
+npm run reset:docker
+
+# Remove volumes and rebuild from scratch
+docker compose down -v
+docker compose up -d --build
 ```
 
 ---
@@ -344,6 +518,17 @@ node scripts/reset-docker-and-rebuild.js
 - Closed-loop — detect, diagnose, remediate, learn, all locally
 - Auditable — every action persisted in MongoDB for replay and review
 - Modular — each service is independently replaceable
+
+---
+
+## Documentation
+
+Additional documentation is available in the `docs/` directory:
+
+- [`docs/architecture.md`](docs/architecture.md) — Detailed architecture overview
+- [`docs/ml-pipeline.md`](docs/ml-pipeline.md) — Machine learning pipeline documentation
+- [`docs/presentation-flow.md`](docs/presentation-flow.md) — Demo presentation flow
+- [`docs/security.md`](docs/security.md) — Security model and policies
 
 ---
 
