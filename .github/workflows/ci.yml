@@ -173,6 +173,8 @@ jobs:
       - name: Wait for Kafka
         run: npm run wait:kafka
         timeout-minutes: 1
+        env:
+          KAFKA_BROKER: localhost:9094
 
       - name: Run health checks
         run: |
