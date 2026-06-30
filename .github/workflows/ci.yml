@@ -176,9 +176,25 @@ jobs:
         env:
           KAFKA_BROKER: localhost:9094
 
+      - name: Start backend
+        run: node dist/main.js &
+        env:
+          BACKEND_PORT: '3001'
+          KAFKA_BROKER: localhost:9094
+          MONGODB_URI: mongodb://localhost:27018/aegis
+          AI_ENGINE_URL: http://localhost:8001
+
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3001/ && exit 0
+            sleep 2
+          done
+          echo "Backend did not become ready"
+          exit 1
+
       - name: Run health checks
         run: |
-          sleep 10
           curl -sf http://localhost:3001/ || exit 1
           curl -sf http://localhost:3001/api/health || exit 1
           curl -sf http://localhost:8001/health || exit 1
