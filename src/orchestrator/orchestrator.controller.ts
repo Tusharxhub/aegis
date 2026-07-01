@@ -10,14 +10,36 @@ import {
   Logger,
   HttpCode,
   HttpStatus,
+  BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Types } from 'mongoose';
 import { InternalTokenGuard } from '../common/guards/internal-token.guard.js';
 import { DockerService } from '../docker/docker.service.js';
 import { AuditService } from './audit.service.js';
 import { KafkaProducerService } from '../kafka/kafka.producer.js';
 import { MongoService } from '../mongo/mongo.service.js';
 import { DYNAMIC_IGNORED_CONTAINERS } from '../common/constants/index.js';
+
+/**
+ * Validates that a string looks like a Docker container ID (hex string, 12 or 64 chars)
+ * or a container name (alphanumeric with hyphens/underscores/dots).
+ */
+function isValidContainerRef(id: string): boolean {
+  // Docker short ID (12 hex) or full ID (64 hex)
+  if (/^[a-f0-9]{12,64}$/i.test(id)) return true;
+  // Container name: alphanumeric, hyphens, underscores, dots, slashes
+  if (/^[a-zA-Z0-9][a-zA-Z0-9._\-/]{0,127}$/.test(id)) return true;
+  return false;
+}
+
+/**
+ * Validates that a string is a valid MongoDB ObjectId.
+ */
+function isValidObjectId(id: string): boolean {
+  return Types.ObjectId.isValid(id) && new Types.ObjectId(id).toString() === id;
+}
 
 /**
  * OrchestratorController — Internal API for operational inspection.
@@ -60,6 +82,9 @@ export class OrchestratorController {
    */
   @Get('containers/:id')
   async inspectContainer(@Param('id') id: string) {
+    if (!isValidContainerRef(id)) {
+      throw new BadRequestException('Invalid container ID format.');
+    }
     const info = await this.dockerService.inspectContainer(id);
     return {
       status: 'ok',
@@ -77,24 +102,16 @@ export class OrchestratorController {
    */
   @Get('containers/:id/logs')
   async getContainerLogs(@Param('id') id: string) {
+    if (!isValidContainerRef(id)) {
+      throw new BadRequestException('Invalid container ID format.');
+    }
     try {
-      const container = this.dockerService['docker'].getContainer(id);
-      const logBuffer = await container.logs({
-        stdout: true,
-        stderr: true,
-        tail: 100,
-        timestamps: true,
-      });
-      const logs = logBuffer
-        .toString('utf8')
-        // eslint-disable-next-line no-control-regex
-        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
-        .trim();
+      const logs = await this.dockerService.getContainerLogs(id);
       return { status: 'ok', logs };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`Failed to get logs for ${id}: ${message}`);
-      return { status: 'error', message, logs: '' };
+      this.logger.warn(`Failed to get logs for container: ${message}`);
+      return { status: 'error', message: 'Failed to retrieve logs.', logs: '' };
     }
   }
 
@@ -105,9 +122,12 @@ export class OrchestratorController {
   @UseGuards(InternalTokenGuard)
   @HttpCode(HttpStatus.OK)
   async restartContainer(@Param('id') id: string) {
+    if (!isValidContainerRef(id)) {
+      throw new BadRequestException('Invalid container ID format.');
+    }
     this.logger.warn(`Manual container restart requested for: ${id}`);
     await this.dockerService.restartContainer(id);
-    return { status: 'ok', message: `Container ${id} restart initiated.` };
+    return { status: 'ok', message: 'Container restart initiated.' };
   }
 
   /**
@@ -206,12 +226,15 @@ export class OrchestratorController {
    */
   @Get('incidents/:id')
   async getIncident(@Param('id') id: string) {
+    if (!isValidObjectId(id)) {
+      throw new BadRequestException('Invalid incident ID format.');
+    }
     try {
       const event = await this.mongoService.EventModel.findById(id)
         .lean()
         .exec();
       if (!event) {
-        return { status: 'error', message: 'Incident not found' };
+        throw new NotFoundException('Incident not found.');
       }
 
       // Find related plan
@@ -339,10 +362,13 @@ export class OrchestratorController {
    */
   @Get('remediations/:id')
   async getRemediation(@Param('id') id: string) {
+    if (!isValidObjectId(id)) {
+      throw new BadRequestException('Invalid remediation ID format.');
+    }
     try {
       const plan = await this.mongoService.PlanModel.findById(id).lean().exec();
       if (!plan) {
-        return { status: 'error', message: 'Remediation plan not found' };
+        throw new NotFoundException('Remediation plan not found.');
       }
 
       const execution = await this.mongoService.ExecutionModel.findOne({

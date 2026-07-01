@@ -177,7 +177,15 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
   // ─────────────────────────────────────────────────────────────────────────
 
   private async handleRawEvent(chunk: Buffer): Promise<void> {
-    const raw: RawDockerEvent = JSON.parse(chunk.toString('utf8'));
+    let raw: RawDockerEvent;
+    try {
+      raw = JSON.parse(chunk.toString('utf8')) as RawDockerEvent;
+    } catch {
+      this.logger.warn(
+        `Received malformed Docker event (${chunk.length} bytes). Skipping.`,
+      );
+      return;
+    }
 
     const containerName = raw.Actor.Attributes.name ?? 'unknown';
 
@@ -253,8 +261,9 @@ export class DockerService implements OnModuleInit, OnModuleDestroy {
   /**
    * Extract the last N lines of logs from a container.
    * Handles the Docker multiplexed stream format.
+   * Public to allow the controller to fetch logs via the proper API.
    */
-  private async getContainerLogs(containerId: string): Promise<string> {
+  async getContainerLogs(containerId: string): Promise<string> {
     const container = this.docker.getContainer(containerId);
     try {
       const logBuffer = await container.logs({

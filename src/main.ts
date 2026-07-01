@@ -26,6 +26,19 @@ async function bootstrap(): Promise<void> {
   // Security hardening
   app.use(helmet());
 
+  // CORS policy — restrict to localhost only (headless backend, no public frontend)
+  app.enableCors({
+    origin: [
+      'http://localhost:3001',
+      'http://127.0.0.1:3001',
+      'http://localhost:8080',
+      'http://localhost:8081',
+    ],
+    methods: ['GET', 'POST', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'x-aegis-token'],
+    credentials: false,
+  });
+
   // Internal API prefix — not a public-facing API surface
   app.setGlobalPrefix('api', {
     exclude: ['/'],

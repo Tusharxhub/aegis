@@ -26,7 +26,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import numpy as np
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from classifier import IncidentClassifier
@@ -59,6 +59,13 @@ embedding_pipeline: EmbeddingPipeline | None = None
 classifier: IncidentClassifier | None = None
 vector_memory: VectorMemory | None = None
 kafka_client: AegisKafkaClient | None = None
+
+# Thread-safe lock to prevent concurrent training
+import threading
+_training_lock = threading.Lock()
+
+# API key for protected endpoints (loaded from env)
+_TRAIN_API_KEY: str | None = os.environ.get("AEGIS_TRAIN_API_KEY")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -329,11 +336,30 @@ def diagnose_logs(request: DiagnoseRequest) -> DiagnoseResponse:
 
 
 @app.post("/train")
-def train_model(request: TrainRequest) -> dict[str, Any]:
+def train_model(request: TrainRequest, raw_request: Request) -> dict[str, Any]:
     """
     Retrain the MLP classifier on freshly generated synthetic data.
     Used for offline research and model improvement.
+
+    Protected by X-Aegis-Token header when AEGIS_TRAIN_API_KEY is set.
+    Concurrent training is prevented by a lock.
     """
+    # Auth check
+    if _TRAIN_API_KEY:
+        token = raw_request.headers.get("x-aegis-token", "")
+        if token != _TRAIN_API_KEY:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid or missing x-aegis-token header.",
+            )
+
+    # Prevent concurrent training
+    if not _training_lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Training is already in progress. Please wait.",
+        )
+
     global embedding_pipeline, classifier, vector_memory
 
     try:
@@ -398,3 +424,5 @@ def train_model(request: TrainRequest) -> dict[str, Any]:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Training pipeline failure: {exc}",
         )
+    finally:
+        _training_lock.release()

@@ -294,15 +294,10 @@ export class OrchestratorService implements OnModuleInit {
     // ─────────────────────────────────────────────────────────────────────────
     // Circuit breaker: check restart count and cooldown
     // ─────────────────────────────────────────────────────────────────────────
-    const recentRestarts = await this.auditService.getRestartCount(
+    const recentRestarts = await this.auditService.getRestartCountAtomic(
       event.containerId,
       3_600_000, // 1 hour window
     );
-
-    // If no recent restarts, reset the counter so the next cycle starts fresh
-    if (recentRestarts === 0) {
-      await this.auditService.resetRestartCount(event.containerId);
-    }
 
     if (recentRestarts >= MAX_RESTARTS_PER_HOUR) {
       this.logger.warn(

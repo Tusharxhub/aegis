@@ -116,6 +116,58 @@ export class AuditService {
   }
 
   /**
+   * Atomically get the restart count, resetting the counter if the window has elapsed.
+   * This prevents TOCTOU race conditions when multiple crash events arrive simultaneously.
+   *
+   * Operation:
+   *   1. If lastRemediationAt is outside the window, atomically reset restartCount to 0
+   *      and return 0 (the old restarts don't matter anymore).
+   *   2. If lastRemediationAt is inside the window, return the current restartCount.
+   */
+  async getRestartCountAtomic(
+    containerId: string,
+    windowMs: number,
+  ): Promise<number> {
+    try {
+      const since = new Date(Date.now() - windowMs);
+
+      // Attempt atomic reset: if lastRemediationAt is outside the window, reset counter
+      const resetResult =
+        await this.mongoService.ServiceModel.findOneAndUpdate(
+          {
+            containerId,
+            $or: [
+              { lastRemediationAt: null },
+              { lastRemediationAt: { $lt: since } },
+            ],
+          },
+          { $set: { restartCount: 0 } },
+          { returnDocument: 'after' },
+        );
+
+      if (resetResult) {
+        // Counter was stale and has been atomically reset
+        return 0;
+      }
+
+      // Counter is within the window — read the current value
+      const doc = await this.mongoService.ServiceModel.findOne({ containerId })
+        .select('restartCount')
+        .lean()
+        .exec();
+
+      return doc?.restartCount ?? 0;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Failed to get atomic restart count for ${containerId}: ${msg}`,
+      );
+      // Fail-safe: return 0 so remediation can proceed
+      return 0;
+    }
+  }
+
+  /**
    * Reset the restart count for a container (called when the restart
    * window has fully elapsed and a fresh cycle begins).
    */

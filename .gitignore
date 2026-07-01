@@ -22,6 +22,7 @@ apps/
 frontend/
 
 # local Python environments
+services/ai-engine/.venv*/
 services/rl-engine/.venv*/
 services/ai-engine/__pycache__/
 services/rl-engine/__pycache__/
